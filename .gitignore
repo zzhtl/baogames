@@ -1,0 +1,4 @@
+#please add some patterns to ignore
+target
+.claude*
+.vscode
