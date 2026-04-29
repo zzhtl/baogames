@@ -17,7 +17,7 @@ pub(super) const PLAY_OFFSET_Y: f32 = -10.0;
 
 pub(super) const TILE: f32 = 2.0 * SUBTILE;
 pub(super) const TANK_SIZE: f32 = 2.0 * SUBTILE;
-pub(super) const BULLET_SIZE: f32 = 10.0;
+pub(super) const BULLET_SIZE: f32 = 6.0;
 
 pub(super) const PLAYER_SPEED: f32 = 110.0;
 pub(super) const ENEMY_SPEED_BASE: f32 = 70.0;
