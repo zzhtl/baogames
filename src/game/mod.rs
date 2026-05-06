@@ -3,6 +3,7 @@ use bevy::window::WindowResolution;
 use rand::prelude::*;
 use std::time::Duration;
 
+mod bomb_maze;
 mod model;
 mod rules;
 mod spawn;
@@ -64,6 +65,23 @@ pub fn run() {
                 tank::tank_spawn_effect,
                 tank::tank_player_respawn,
                 tank::tank_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing)),
+        )
+        .add_systems(
+            Update,
+            (
+                bomb_maze::bm_player_input,
+                bomb_maze::bm_enemy_ai,
+                bomb_maze::bm_bomb_tick,
+                bomb_maze::bm_flame_tick,
+                bomb_maze::bm_flame_damage,
+                bomb_maze::bm_enemy_touch,
+                bomb_maze::bm_powerup_pickup,
+                bomb_maze::bm_exit_and_respawn,
+                bomb_maze::bm_player_blink,
+                bomb_maze::bm_hud_update,
             )
                 .chain()
                 .run_if(in_state(AppState::Playing)),
@@ -424,7 +442,7 @@ fn setup_game(
     });
 
     paint_stage_backdrop(&mut commands, selected.0);
-    if selected.0 != GameKind::Tank {
+    if !matches!(selected.0, GameKind::Tank | GameKind::BombMaze) {
         text(
             &mut commands,
             &font,
@@ -439,65 +457,11 @@ fn setup_game(
 
     match selected.0 {
         GameKind::Tank => tank::setup_stage(&mut commands, &font, level),
-        GameKind::BombMaze => setup_bomb_maze(&mut commands, level),
+        GameKind::BombMaze => bomb_maze::setup_stage(&mut commands, &font, level),
         GameKind::BubbleShooter => setup_bubble_shooter(&mut commands, level),
         GameKind::PlaneShooter => setup_plane_shooter(&mut commands, level),
         GameKind::RunGun => setup_run_gun(&mut commands, level),
         GameKind::Platformer => setup_platformer(&mut commands, level),
-    }
-}
-
-fn setup_bomb_maze(commands: &mut Commands, level: u8) {
-    spawn_player(
-        commands,
-        0,
-        Vec2::new(-390.0, -190.0),
-        Color::srgb(0.3, 0.78, 0.51),
-    );
-    spawn_player(
-        commands,
-        1,
-        Vec2::new(-330.0, -190.0),
-        Color::srgb(0.38, 0.69, 0.95),
-    );
-    for x in (-360..=360).step_by(120) {
-        for y in (-180..=180).step_by(120) {
-            spawn_wall(
-                commands,
-                Vec2::new(x as f32, y as f32),
-                Vec2::splat(38.0),
-                Color::srgb(0.42, 0.44, 0.5),
-            );
-        }
-    }
-    for i in 0..(14 + level as usize) {
-        let x = -300.0 + (i % 7) as f32 * 100.0;
-        let y = -120.0 + (i / 7) as f32 * 85.0;
-        if x < -250.0 && y < -90.0 {
-            continue;
-        }
-        rect(
-            commands,
-            Vec2::new(x, y),
-            Vec2::splat(42.0),
-            Color::srgb(0.65, 0.38, 0.22),
-            GameEntity,
-        )
-        .insert((
-            SoftBlock,
-            Collider {
-                size: Vec2::splat(42.0),
-            },
-        ));
-    }
-    for i in 0..(3 + level.min(5)) {
-        spawn_enemy(
-            commands,
-            Vec2::new(120.0 + i as f32 * 70.0, 155.0 - i as f32 * 40.0),
-            1,
-            150,
-            Color::srgb(0.92, 0.5, 0.25),
-        );
     }
 }
 
@@ -656,6 +620,9 @@ fn player_input(
         Option<&mut Grounded>,
     )>,
 ) {
+    if matches!(session.kind, GameKind::Tank | GameKind::BombMaze) {
+        return;
+    }
     if session.paused || session.finished {
         return;
     }
@@ -792,6 +759,9 @@ fn update_bombs(
     session: Res<GameSession>,
     mut bombs: Query<(Entity, &Transform, &mut Bomb)>,
 ) {
+    if matches!(session.kind, GameKind::BombMaze) {
+        return;
+    }
     if session.paused || session.finished {
         return;
     }
@@ -829,6 +799,9 @@ fn update_enemies(
     players: Query<&Transform, (With<Player>, Without<Enemy>)>,
     mut enemies: Query<(&mut Transform, Option<&mut Velocity>), With<Enemy>>,
 ) {
+    if matches!(session.kind, GameKind::Tank | GameKind::BombMaze) {
+        return;
+    }
     if session.paused || session.finished {
         return;
     }
@@ -937,6 +910,9 @@ fn collision_system(
     goals: Query<(&Transform, &Collider), (With<Goal>, Without<Player>)>,
     bubbles: Query<(Entity, &Transform, &Bubble), (Without<Projectile>, Without<Player>)>,
 ) {
+    if matches!(session.kind, GameKind::Tank | GameKind::BombMaze) {
+        return;
+    }
     if session.paused || session.finished {
         return;
     }
@@ -1096,7 +1072,7 @@ fn check_level_end(
     bubbles: Query<Entity, (With<Bubble>, Without<Projectile>)>,
     collectibles: Query<Entity, With<Collectible>>,
 ) {
-    if session.finished || session.kind == GameKind::Tank {
+    if session.finished || matches!(session.kind, GameKind::Tank | GameKind::BombMaze) {
         return;
     }
     if session.time_left <= 0.0 {
@@ -1105,11 +1081,7 @@ fn check_level_end(
         return;
     }
     match session.kind {
-        GameKind::BombMaze => {
-            if enemies.is_empty() {
-                finish_game(&mut session, &mut save, true);
-            }
-        }
+        GameKind::BombMaze => {}
         GameKind::Tank => {}
         GameKind::BubbleShooter => {
             if bubbles.is_empty() {
@@ -1131,7 +1103,7 @@ fn check_level_end(
 }
 
 fn update_hud(session: Res<GameSession>, mut hud: Query<&mut Text2d, With<HudText>>) {
-    if !session.is_changed() || session.kind == GameKind::Tank {
+    if !session.is_changed() || matches!(session.kind, GameKind::Tank | GameKind::BombMaze) {
         return;
     }
     if let Ok(mut text) = hud.single_mut() {
