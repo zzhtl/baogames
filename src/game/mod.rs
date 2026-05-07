@@ -4,6 +4,7 @@ use bevy::window::WindowResolution;
 mod bomb_maze;
 mod model;
 mod space_shooter;
+mod super_mario;
 mod tank;
 
 use crate::common::constants::{ARENA_H, ARENA_W, WINDOW_H, WINDOW_W};
@@ -87,6 +88,51 @@ pub fn run() {
                 .chain()
                 .run_if(in_state(AppState::Playing))
                 .run_if(resource_exists::<space_shooter::SpaceState>),
+        )
+        .add_systems(
+            Update,
+            (
+                super_mario::mario_player_input,
+                super_mario::mario_physics,
+                super_mario::mario_block_anim,
+                super_mario::mario_coin_popup,
+                super_mario::mario_goomba_ai,
+                super_mario::mario_player_vs_goomba,
+                super_mario::mario_koopa_ai,
+                super_mario::mario_player_vs_koopa,
+                super_mario::mario_shell_kills,
+                super_mario::mario_platform_update,
+                super_mario::mario_lava_check,
+                super_mario::mario_powerup_update,
+                super_mario::mario_player_vs_powerup,
+                super_mario::mario_fireball_update,
+                super_mario::mario_brick_break,
+                super_mario::mario_shard_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<super_mario::MarioStage>),
+        )
+        .add_systems(
+            Update,
+            (
+                super_mario::mario_bowser_ai,
+                super_mario::mario_bowser_fireball_update,
+                super_mario::mario_player_fire_vs_bowser,
+                super_mario::mario_bowser_cleanup,
+                super_mario::mario_axe_check,
+                super_mario::mario_flag_check,
+                super_mario::mario_flag_anim,
+                super_mario::mario_finish_seq,
+                super_mario::mario_respawn,
+                super_mario::mario_time_check,
+                super_mario::mario_player_blink,
+                super_mario::mario_camera_follow,
+                super_mario::mario_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<super_mario::MarioStage>),
         )
         .add_systems(OnExit(AppState::Playing), cleanup::<GameEntity>)
         .run();
@@ -431,13 +477,16 @@ fn setup_game(
         status: selected.0.goal_text().to_string(),
     });
 
-    paint_stage_backdrop(&mut commands, selected.0);
+    if !matches!(selected.0, GameKind::SuperMario) {
+        paint_stage_backdrop(&mut commands, selected.0);
+    }
 
     match selected.0 {
         GameKind::Tank => tank::setup_stage(&mut commands, &font, level),
         GameKind::BombMaze => bomb_maze::setup_stage(&mut commands, &font, level),
         GameKind::SpaceShooter => space_shooter::setup_stage(&mut commands, &font, level),
-        GameKind::SuperMario | GameKind::Contra | GameKind::BubbleBobble => {
+        GameKind::SuperMario => super_mario::setup_stage(&mut commands, &font, level),
+        GameKind::Contra | GameKind::BubbleBobble => {
             setup_coming_soon(&mut commands, &font, selected.0);
         }
     }
