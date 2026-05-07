@@ -15,41 +15,41 @@ pub(super) enum AppState {
 pub(super) enum GameKind {
     Tank,
     BombMaze,
-    BubbleShooter,
-    PlaneShooter,
-    RunGun,
-    Platformer,
+    SpaceShooter,
+    SuperMario,
+    Contra,
+    BubbleBobble,
 }
 
 impl GameKind {
     pub(super) const ALL: [GameKind; 6] = [
         GameKind::Tank,
         GameKind::BombMaze,
-        GameKind::BubbleShooter,
-        GameKind::PlaneShooter,
-        GameKind::RunGun,
-        GameKind::Platformer,
+        GameKind::SpaceShooter,
+        GameKind::SuperMario,
+        GameKind::Contra,
+        GameKind::BubbleBobble,
     ];
 
     pub(super) fn index(self) -> usize {
         match self {
             GameKind::Tank => 0,
             GameKind::BombMaze => 1,
-            GameKind::BubbleShooter => 2,
-            GameKind::PlaneShooter => 3,
-            GameKind::RunGun => 4,
-            GameKind::Platformer => 5,
+            GameKind::SpaceShooter => 2,
+            GameKind::SuperMario => 3,
+            GameKind::Contra => 4,
+            GameKind::BubbleBobble => 5,
         }
     }
 
     pub(super) fn title(self) -> &'static str {
         match self {
-            GameKind::Tank => "1 经典坦克",
+            GameKind::Tank => "1 坦克大战",
             GameKind::BombMaze => "2 炸弹迷宫",
-            GameKind::BubbleShooter => "3 泡泡龙风格",
-            GameKind::PlaneShooter => "4 竖版飞行",
-            GameKind::RunGun => "5 横版射击",
-            GameKind::Platformer => "6 平台跳跃",
+            GameKind::SpaceShooter => "3 太空射击",
+            GameKind::SuperMario => "4 超级玛丽",
+            GameKind::Contra => "5 魂斗罗",
+            GameKind::BubbleBobble => "6 泡泡龙",
         }
     }
 
@@ -57,11 +57,18 @@ impl GameKind {
         match self {
             GameKind::Tank => "保护基地，击败所有小坦克",
             GameKind::BombMaze => "炸开软砖，清理迷宫里的小机器人",
-            GameKind::BubbleShooter => "发射同色泡泡，清空顶部泡泡",
-            GameKind::PlaneShooter => "躲开云朵飞机，完成这一波飞行",
-            GameKind::RunGun => "跳过平台，打掉挡路机器人",
-            GameKind::Platformer => "收集星星，到达彩旗",
+            GameKind::SpaceShooter => "驾驶战机击落敌机，挑战关底 BOSS",
+            GameKind::SuperMario => "敬请期待",
+            GameKind::Contra => "敬请期待",
+            GameKind::BubbleBobble => "敬请期待",
         }
+    }
+
+    pub(super) fn implemented(self) -> bool {
+        matches!(
+            self,
+            GameKind::Tank | GameKind::BombMaze | GameKind::SpaceShooter
+        )
     }
 }
 
@@ -109,9 +116,6 @@ pub(super) struct GameSession {
     pub(super) paused: bool,
     pub(super) finished: bool,
     pub(super) won: bool,
-    pub(super) time_left: f32,
-    pub(super) spawn_clock: f32,
-    pub(super) player_cooldown: [f32; 2],
     pub(super) status: String,
 }
 
@@ -120,31 +124,6 @@ pub(super) struct MenuEntity;
 
 #[derive(Component, Clone, Copy)]
 pub(super) struct GameEntity;
-
-#[derive(Component)]
-pub(super) struct HudText;
-
-#[derive(Component)]
-pub(super) struct Player {
-    pub(super) id: usize,
-}
-
-#[derive(Component)]
-pub(super) struct Enemy {
-    pub(super) hp: i32,
-    pub(super) points: u32,
-}
-
-#[derive(Component)]
-pub(super) struct Projectile {
-    pub(super) owner: ProjectileOwner,
-    pub(super) radius: f32,
-}
-
-#[derive(Component, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ProjectileOwner {
-    Player,
-}
 
 #[derive(Component, Deref, DerefMut)]
 pub(super) struct Velocity(pub(super) Vec2);
@@ -155,32 +134,4 @@ pub(super) struct Collider {
 }
 
 #[derive(Component)]
-pub(super) struct SoftBlock;
-
-#[derive(Component)]
-pub(super) struct Wall;
-
-#[derive(Component)]
-pub(super) struct Goal;
-
-#[derive(Component)]
-pub(super) struct Collectible;
-
-#[derive(Component)]
-pub(super) struct Bubble {
-    pub(super) color_id: usize,
-}
-
-#[derive(Component)]
-pub(super) struct Bomb {
-    pub(super) timer: Timer,
-}
-
-#[derive(Component)]
-pub(super) struct Explosion {}
-
-#[derive(Component)]
 pub(super) struct Lifetime(pub(super) Timer);
-
-#[derive(Component)]
-pub(super) struct Grounded(pub(super) bool);
