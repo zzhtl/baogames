@@ -59,7 +59,7 @@ impl GameKind {
             GameKind::BombMaze => "炸开软砖，清理迷宫里的小机器人",
             GameKind::SpaceShooter => "驾驶战机击落敌机，挑战关底 BOSS",
             GameKind::SuperMario => "踩 Goomba、吃蘑菇、冲到旗杆下！",
-            GameKind::Contra => "敬请期待",
+            GameKind::Contra => "8 方向射击，吃道具，击破要塞 BOSS",
             GameKind::BubbleBobble => "敬请期待",
         }
     }
@@ -67,7 +67,11 @@ impl GameKind {
     pub(super) fn implemented(self) -> bool {
         matches!(
             self,
-            GameKind::Tank | GameKind::BombMaze | GameKind::SpaceShooter | GameKind::SuperMario
+            GameKind::Tank
+                | GameKind::BombMaze
+                | GameKind::SpaceShooter
+                | GameKind::SuperMario
+                | GameKind::Contra
         )
     }
 }

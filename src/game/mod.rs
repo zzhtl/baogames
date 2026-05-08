@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::window::WindowResolution;
 
 mod bomb_maze;
+mod contra;
 mod model;
 mod space_shooter;
 mod super_mario;
@@ -134,7 +135,33 @@ pub fn run() {
                 .run_if(in_state(AppState::Playing))
                 .run_if(resource_exists::<super_mario::MarioStage>),
         )
-        .add_systems(OnExit(AppState::Playing), cleanup::<GameEntity>)
+        .add_systems(
+            Update,
+            (
+                contra::contra_player_input,
+                contra::contra_physics,
+                contra::contra_enemy_ai,
+                contra::contra_falcon_update,
+                contra::contra_pickup_update,
+                contra::contra_spawner,
+                contra::contra_boss_update,
+                contra::contra_bullets_update,
+                contra::contra_player_vs_enemy,
+                contra::contra_explosion_update,
+                contra::contra_offscreen_cleanup,
+                contra::contra_player_respawn,
+                contra::contra_player_blink,
+                contra::contra_camera_follow,
+                contra::contra_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<contra::ContraStage>),
+        )
+        .add_systems(
+            OnExit(AppState::Playing),
+            (cleanup::<GameEntity>, cleanup_stage_resources),
+        )
         .run();
 }
 
@@ -359,7 +386,7 @@ fn menu_accent(kind: GameKind) -> Color {
         GameKind::BombMaze => Color::srgb(0.95, 0.58, 0.24),
         GameKind::SpaceShooter => Color::srgb(0.36, 0.72, 1.0),
         GameKind::SuperMario => Color::srgb(0.92, 0.35, 0.28),
-        GameKind::Contra => Color::srgb(0.78, 0.42, 0.22),
+        GameKind::Contra => Color::srgb(0.92, 0.18, 0.10),
         GameKind::BubbleBobble => Color::srgb(0.9, 0.34, 0.78),
     }
 }
@@ -477,7 +504,7 @@ fn setup_game(
         status: selected.0.goal_text().to_string(),
     });
 
-    if !matches!(selected.0, GameKind::SuperMario) {
+    if !matches!(selected.0, GameKind::SuperMario | GameKind::Contra) {
         paint_stage_backdrop(&mut commands, selected.0);
     }
 
@@ -486,7 +513,13 @@ fn setup_game(
         GameKind::BombMaze => bomb_maze::setup_stage(&mut commands, &font, level),
         GameKind::SpaceShooter => space_shooter::setup_stage(&mut commands, &font, level),
         GameKind::SuperMario => super_mario::setup_stage(&mut commands, &font, level),
-        GameKind::Contra | GameKind::BubbleBobble => {
+        GameKind::Contra => contra::setup_stage(
+            &mut commands,
+            &font,
+            level,
+            save.high_scores[GameKind::Contra.index()],
+        ),
+        GameKind::BubbleBobble => {
             setup_coming_soon(&mut commands, &font, selected.0);
         }
     }
@@ -576,4 +609,12 @@ fn cleanup<T: Component>(mut commands: Commands, entities: Query<Entity, With<T>
     for entity in &entities {
         commands.entity(entity).despawn();
     }
+}
+
+fn cleanup_stage_resources(mut commands: Commands) {
+    commands.remove_resource::<tank::TankStage>();
+    commands.remove_resource::<bomb_maze::BMStage>();
+    commands.remove_resource::<space_shooter::SpaceState>();
+    commands.remove_resource::<super_mario::MarioStage>();
+    commands.remove_resource::<contra::ContraStage>();
 }
