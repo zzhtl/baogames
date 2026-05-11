@@ -60,7 +60,7 @@ impl GameKind {
             GameKind::SpaceShooter => "驾驶战机击落敌机，挑战关底 BOSS",
             GameKind::SuperMario => "踩 Goomba、吃蘑菇、冲到旗杆下！",
             GameKind::Contra => "8 方向射击，吃道具，击破要塞 BOSS",
-            GameKind::BubbleBobble => "敬请期待",
+            GameKind::BubbleBobble => "瞄准三连同色，清空所有泡泡！",
         }
     }
 
@@ -72,6 +72,7 @@ impl GameKind {
                 | GameKind::SpaceShooter
                 | GameKind::SuperMario
                 | GameKind::Contra
+                | GameKind::BubbleBobble
         )
     }
 }

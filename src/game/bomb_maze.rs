@@ -1013,13 +1013,18 @@ pub(super) fn bm_player_input(
             blocked[tp.col as usize][tp.row as usize] = true;
         }
     }
-    let bomb_tiles: Vec<(Entity, i32, i32)> = bombs
+    // (Entity, col, row, owner, remote)
+    let bomb_meta: Vec<(Entity, i32, i32, Option<Entity>, bool)> = bombs
         .iter()
-        .map(|(e, _, tp)| (e, tp.col, tp.row))
+        .map(|(e, b, tp)| (e, tp.col, tp.row, b.owner, b.remote))
+        .collect();
+    let bomb_tiles: Vec<(Entity, i32, i32)> = bomb_meta
+        .iter()
+        .map(|(e, c, r, _, _)| (*e, *c, *r))
         .collect();
 
-    // 收集本帧已存在的炸弹格子（用于禁止重复放置）
-    let occupied_bomb_cells: std::collections::HashSet<(i32, i32)> =
+    // 收集本帧已存在的炸弹格子（用于禁止重复放置；同帧多人也会随之更新）
+    let mut occupied_bomb_cells: std::collections::HashSet<(i32, i32)> =
         bomb_tiles.iter().map(|(_, c, r)| (*c, *r)).collect();
 
     let mut place_requests: Vec<(Entity, i32, i32, i32, bool)> = Vec::new();
@@ -1041,7 +1046,6 @@ pub(super) fn bm_player_input(
         let speed = player.speed();
         let pos = tf.translation.truncate();
 
-        // 角落贴边：只有水平/垂直输入时尝试居中另一轴
         let target_pos = move_with_collision(
             pos,
             dir,
@@ -1057,13 +1061,23 @@ pub(super) fn bm_player_input(
         tf.translation.x = target_pos.x;
         tf.translation.y = target_pos.y;
 
-        // 离开自己放下的炸弹后，从豁免列表移除
+        // 离开自己放下的炸弹后，从豁免列表移除：
+        // 用 bbox 重叠判断，避免玩家走到 tile 边界时（中心刚跨格、bbox 还压在炸弹上）
+        // 因 walking_off 立即清空被自家炸弹卡住。
         if !player.walking_off.is_empty() {
-            let (pc, pr) = world_to_tile(target_pos);
             player.walking_off.retain(|bomb_e| {
-                bomb_tiles
-                    .iter()
-                    .any(|(e, c, r)| *e == *bomb_e && (*c, *r) == (pc, pr))
+                bomb_tiles.iter().any(|(e, c, r)| {
+                    if *e != *bomb_e {
+                        return false;
+                    }
+                    let cell_pos = tile_center(*c, *r);
+                    aabb_overlap(
+                        target_pos,
+                        Vec2::splat(BM_PLAYER_SIZE - 4.0),
+                        cell_pos,
+                        Vec2::splat(BM_BOMB_SIZE - 6.0),
+                    )
+                })
             });
         }
 
@@ -1072,17 +1086,20 @@ pub(super) fn bm_player_input(
             let (pc, pr) = world_to_tile(target_pos);
             if !occupied_bomb_cells.contains(&(pc, pr)) && !blocked[pc as usize][pr as usize] {
                 place_requests.push((entity, pc, pr, player.bomb_range, player.remote));
+                occupied_bomb_cells.insert((pc, pr));
                 player.place_cd = BM_PLACE_CD;
             }
         }
 
-        // 遥控引爆
+        // 遥控引爆：只能引爆自己拥有的、最早放下的一颗遥控炸弹
         if input.jump && player.remote && player.detonate_cd <= 0.0 {
-            // 引爆当前最早放下的一颗遥控炸弹
-            if let Some((bomb_e, _, _)) = bomb_tiles.first() {
+            if let Some((bomb_e, _, _, _, _)) = bomb_meta
+                .iter()
+                .find(|(_, _, _, owner, remote)| *remote && *owner == Some(entity))
+            {
                 detonate_requests.push(*bomb_e);
+                player.detonate_cd = 0.18;
             }
-            player.detonate_cd = 0.18;
         }
     }
 
@@ -1181,51 +1198,98 @@ fn move_with_collision(
     let mut new_pos = pos;
     let dx = dir.x * speed * delta;
     let dy = dir.y * speed * delta;
+    let abs_dx = dx.abs();
+    let abs_dy = dy.abs();
+    let move_x = abs_dx > 1e-3;
+    let move_y = abs_dy > 1e-3;
+    let cardinal_x = move_x && !move_y;
+    let cardinal_y = move_y && !move_x;
+    let snap_step = speed * delta;
+
+    // 计算朝当前 tile 中心吸附（仅单轴移动时使用），返回偏移量
+    let snap_to_row_center = |p: Vec2| -> f32 {
+        let (_, row) = world_to_tile(p);
+        let row_y = tile_center(0, row).y;
+        let diff = row_y - p.y;
+        if diff.abs() < 0.5 {
+            0.0
+        } else if diff.abs() < snap_step {
+            diff
+        } else {
+            diff.signum() * snap_step
+        }
+    };
+    let snap_to_col_center = |p: Vec2| -> f32 {
+        let (col, _) = world_to_tile(p);
+        let col_x = tile_center(col, 0).x;
+        let diff = col_x - p.x;
+        if diff.abs() < 0.5 {
+            0.0
+        } else if diff.abs() < snap_step {
+            diff
+        } else {
+            diff.signum() * snap_step
+        }
+    };
 
     // X 方向
-    if dx != 0.0 {
-        let try_x = Vec2::new((new_pos.x + dx).clamp(pmin.x, pmax.x), new_pos.y);
-        if !collide(try_x) {
-            new_pos = try_x;
-        } else if dy.abs() < 1e-3 {
-            // 角落贴边：垂直方向自动微调到最近行中心
-            let (_, row) = world_to_tile(new_pos);
-            let row_y = tile_center(0, row).y;
-            let diff = row_y - new_pos.y;
-            if diff.abs() > 0.5 && diff.abs() < BM_TILE * 0.45 {
-                let step = diff.signum() * speed * delta;
-                let nudged_y = if step.abs() > diff.abs() {
-                    row_y
-                } else {
-                    new_pos.y + step
-                };
-                let candidate = Vec2::new(new_pos.x + dx, nudged_y).clamp(pmin, pmax);
-                if !collide(candidate) {
-                    new_pos = candidate;
+    if move_x {
+        let snap_y = if cardinal_x { snap_to_row_center(new_pos) } else { 0.0 };
+        let target_x = (new_pos.x + dx).clamp(pmin.x, pmax.x);
+        let try_combo = Vec2::new(target_x, (new_pos.y + snap_y).clamp(pmin.y, pmax.y));
+        if !collide(try_combo) {
+            new_pos = try_combo;
+        } else {
+            let try_x = Vec2::new(target_x, new_pos.y);
+            if !collide(try_x) {
+                new_pos = try_x;
+            } else if cardinal_x {
+                // 撞墙时尝试更大幅度的角落贴边，最大半个 tile
+                let (_, row) = world_to_tile(new_pos);
+                let row_y = tile_center(0, row).y;
+                let diff = row_y - new_pos.y;
+                if diff.abs() > 0.5 && diff.abs() < BM_TILE * 0.5 {
+                    let step = diff.signum() * snap_step;
+                    let nudged_y = if step.abs() > diff.abs() {
+                        row_y
+                    } else {
+                        new_pos.y + step
+                    };
+                    let candidate = Vec2::new(target_x, nudged_y).clamp(pmin, pmax);
+                    if !collide(candidate) {
+                        new_pos = candidate;
+                    }
                 }
             }
         }
     }
 
     // Y 方向
-    if dy != 0.0 {
-        let try_y = Vec2::new(new_pos.x, (new_pos.y + dy).clamp(pmin.y, pmax.y));
-        if !collide(try_y) {
-            new_pos = try_y;
-        } else if dx.abs() < 1e-3 {
-            let (col, _) = world_to_tile(new_pos);
-            let col_x = tile_center(col, 0).x;
-            let diff = col_x - new_pos.x;
-            if diff.abs() > 0.5 && diff.abs() < BM_TILE * 0.45 {
-                let step = diff.signum() * speed * delta;
-                let nudged_x = if step.abs() > diff.abs() {
-                    col_x
-                } else {
-                    new_pos.x + step
-                };
-                let candidate = Vec2::new(nudged_x, new_pos.y + dy).clamp(pmin, pmax);
-                if !collide(candidate) {
-                    new_pos = candidate;
+    if move_y {
+        let snap_x = if cardinal_y { snap_to_col_center(new_pos) } else { 0.0 };
+        let target_y = (new_pos.y + dy).clamp(pmin.y, pmax.y);
+        let try_combo = Vec2::new((new_pos.x + snap_x).clamp(pmin.x, pmax.x), target_y);
+        if !collide(try_combo) {
+            new_pos = try_combo;
+        } else {
+            let try_y = Vec2::new(new_pos.x, target_y);
+            if !collide(try_y) {
+                new_pos = try_y;
+            } else if cardinal_y {
+                let (col, _) = world_to_tile(new_pos);
+                let col_x = tile_center(col, 0).x;
+                let diff = col_x - new_pos.x;
+                if diff.abs() > 0.5 && diff.abs() < BM_TILE * 0.5 {
+                    let step = diff.signum() * snap_step;
+                    let nudged_x = if step.abs() > diff.abs() {
+                        col_x
+                    } else {
+                        new_pos.x + step
+                    };
+                    let candidate = Vec2::new(nudged_x, target_y).clamp(pmin, pmax);
+                    if !collide(candidate) {
+                        new_pos = candidate;
+                    }
                 }
             }
         }

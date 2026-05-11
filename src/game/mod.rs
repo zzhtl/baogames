@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::window::WindowResolution;
 
 mod bomb_maze;
+mod bubble_shooter;
 mod contra;
 mod model;
 mod space_shooter;
@@ -157,6 +158,21 @@ pub fn run() {
                 .chain()
                 .run_if(in_state(AppState::Playing))
                 .run_if(resource_exists::<contra::ContraStage>),
+        )
+        .add_systems(
+            Update,
+            (
+                bubble_shooter::bubble_player_input,
+                bubble_shooter::bubble_aim_dots_update,
+                bubble_shooter::bubble_shot_update,
+                bubble_shooter::bubble_pop_anim,
+                bubble_shooter::bubble_fall_anim,
+                bubble_shooter::bubble_next_preview_update,
+                bubble_shooter::bubble_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<bubble_shooter::BubbleStage>),
         )
         .add_systems(
             OnExit(AppState::Playing),
@@ -519,12 +535,11 @@ fn setup_game(
             level,
             save.high_scores[GameKind::Contra.index()],
         ),
-        GameKind::BubbleBobble => {
-            setup_coming_soon(&mut commands, &font, selected.0);
-        }
+        GameKind::BubbleBobble => bubble_shooter::setup_stage(&mut commands, &font, level),
     }
 }
 
+#[allow(dead_code)]
 fn setup_coming_soon(commands: &mut Commands, font: &UiFont, kind: GameKind) {
     panel(
         commands,
@@ -617,4 +632,5 @@ fn cleanup_stage_resources(mut commands: Commands) {
     commands.remove_resource::<space_shooter::SpaceState>();
     commands.remove_resource::<super_mario::MarioStage>();
     commands.remove_resource::<contra::ContraStage>();
+    commands.remove_resource::<bubble_shooter::BubbleStage>();
 }
