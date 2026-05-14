@@ -7,7 +7,7 @@ mod resources;
 mod setup;
 mod systems;
 
-pub(super) use resources::BubbleStage;
+pub(super) use resources::{BubbleAssets, BubbleStage};
 pub(super) use setup::setup_stage;
 pub(super) use systems::{
     bubble_aim_dots_update, bubble_fall_anim, bubble_hud_update, bubble_next_preview_update,

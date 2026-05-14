@@ -116,6 +116,12 @@ pub struct SpawnEffect {
 #[derive(Component)]
 pub struct TankHud;
 
+#[derive(Component)]
+pub struct P2Hud;
+
+#[derive(Component)]
+pub struct ModeSelectUi;
+
 #[cfg(test)]
 mod tests {
     use super::*;

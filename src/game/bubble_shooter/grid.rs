@@ -274,6 +274,31 @@ mod tests {
     }
 
     #[test]
+    fn floating_detects_single_isolated_bubble() {
+        let mut g = empty_grid();
+        // 顶部连通的一串
+        g[0][2] = Some(0);
+        g[1][2] = Some(0);
+        // 孤立在中部的单颗（与顶部不连通）
+        g[6][5] = Some(2);
+        let floats = floating_cells(&g);
+        assert_eq!(floats, vec![(5, 6)]);
+    }
+
+    #[test]
+    fn floating_detects_single_bubble_after_chain_pop() {
+        // 模拟：链条被消除后，剩下的单颗与顶部失联
+        let mut g = empty_grid();
+        // 链条原先是 (0,0)-(0,1)-(0,2) 同色三连消除后变 None
+        // 单颗（异色）原来挂在链条下方
+        g[3][0] = Some(3);
+        // 假设顶部其他位置仍有连通泡泡（同列右边）
+        g[0][5] = Some(1);
+        let floats = floating_cells(&g);
+        assert!(floats.contains(&(0, 3)));
+    }
+
+    #[test]
     fn floating_keeps_connected_to_top() {
         let mut g = empty_grid();
         g[0][2] = Some(0);

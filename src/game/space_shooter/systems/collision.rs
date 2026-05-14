@@ -54,7 +54,9 @@ pub fn space_collisions(
                             state.boss_defeated = true;
                             state.message = "BOSS 已摧毁！".to_string();
                             state.message_clock = 3.0;
-                            finish_space(&mut session, &mut save, true);
+                            if finish_space(&mut session, &mut save, true) {
+                                save.store();
+                            }
                         }
                         commands.entity(ee).despawn();
                     }
@@ -137,7 +139,7 @@ fn player_take_hit(
     session.lives -= 1;
     if session.lives < 0 {
         session.lives = 0;
-        finish_space(session, save, false);
+        let _ = finish_space(session, save, false);
         commands.entity(player_entity).despawn();
         return;
     }
@@ -149,9 +151,11 @@ fn player_take_hit(
     player.invincible_left = PLAYER_INVINCIBLE;
 }
 
-fn finish_space(session: &mut GameSession, save: &mut SaveData, won: bool) {
+/// 返回 true 表示 `save` 已被更新、需要持久化到磁盘。
+/// IO 副作用从这里抽出便于单测。
+fn finish_space(session: &mut GameSession, save: &mut SaveData, won: bool) -> bool {
     if session.finished {
-        return;
+        return false;
     }
     session.finished = true;
     session.won = won;
@@ -160,9 +164,86 @@ fn finish_space(session: &mut GameSession, save: &mut SaveData, won: bool) {
         let idx = GameKind::SpaceShooter.index();
         save.high_scores[idx] = save.high_scores[idx].max(session.score);
         save.unlocked_levels[idx] = save.unlocked_levels[idx].max((session.level + 1).min(10));
-        save.store();
         session.status = "通关！Enter 重玩，Esc 返回".to_string();
+        true
     } else {
         session.status = "战机被击毁……Enter 重试，Esc 返回".to_string();
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fresh_session() -> GameSession {
+        GameSession {
+            kind: GameKind::SpaceShooter,
+            level: 1,
+            score: 0,
+            lives: 3,
+            paused: false,
+            finished: false,
+            won: false,
+            status: String::new(),
+        }
+    }
+
+    #[test]
+    fn win_grants_bonus_unlocks_level_and_marks_dirty() {
+        let mut session = fresh_session();
+        session.score = 500;
+        let mut save = SaveData::default();
+        let dirty = finish_space(&mut session, &mut save, true);
+        assert!(dirty);
+        assert!(session.finished);
+        assert!(session.won);
+        assert_eq!(session.score, 1500);
+        assert_eq!(save.high_scores[GameKind::SpaceShooter.index()], 1500);
+        assert!(save.unlocked_levels[GameKind::SpaceShooter.index()] >= 2);
+    }
+
+    #[test]
+    fn loss_does_not_unlock_or_dirty_save() {
+        let mut session = fresh_session();
+        session.score = 200;
+        let mut save = SaveData::default();
+        let dirty = finish_space(&mut session, &mut save, false);
+        assert!(!dirty);
+        assert!(session.finished);
+        assert!(!session.won);
+        // 失败不更新最高分，只在通关时记录
+        assert_eq!(save.high_scores[GameKind::SpaceShooter.index()], 0);
+    }
+
+    #[test]
+    fn finish_is_idempotent() {
+        let mut session = fresh_session();
+        let mut save = SaveData::default();
+        finish_space(&mut session, &mut save, true);
+        let snapshot = session.score;
+        let second = finish_space(&mut session, &mut save, false);
+        assert!(!second);
+        assert_eq!(session.score, snapshot);
+        assert!(session.won, "second call must not flip outcome");
+    }
+
+    #[test]
+    fn high_score_does_not_demote_existing_record() {
+        let mut session = fresh_session();
+        session.score = 100;
+        let mut save = SaveData::default();
+        save.high_scores[GameKind::SpaceShooter.index()] = 9999;
+        finish_space(&mut session, &mut save, true);
+        assert_eq!(save.high_scores[GameKind::SpaceShooter.index()], 9999);
+    }
+
+    #[test]
+    fn unlocked_level_caps_at_ten() {
+        let mut session = fresh_session();
+        session.level = 10;
+        let mut save = SaveData::default();
+        finish_space(&mut session, &mut save, true);
+        assert_eq!(save.unlocked_levels[GameKind::SpaceShooter.index()], 10);
     }
 }

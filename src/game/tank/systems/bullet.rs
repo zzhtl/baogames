@@ -181,32 +181,45 @@ pub fn tank_bullet_update(
         commands.entity(entity).despawn();
     }
 
-    check_stage_completion(&mut session, &mut save, &stage);
-}
-
-fn apply_player_death(stage: &mut TankStage, player_id: usize) {
-    if player_id == 0 {
-        if stage.p1_lives > 0 {
-            stage.p1_lives -= 1;
-            stage.p1_respawn = RESPAWN_TIME;
-        } else {
-            stage.p1_respawn = -1.0;
-        }
-    } else if stage.p2_lives > 0 {
-        stage.p2_lives -= 1;
-        stage.p2_respawn = RESPAWN_TIME;
-    } else {
-        stage.p2_respawn = -1.0;
+    if check_stage_completion(&mut session, &mut save, &stage) {
+        save.store();
     }
 }
 
+fn apply_player_death(stage: &mut TankStage, player_id: usize) {
+    // 死亡后先扣命，扣完才判断是否还有剩余命可以复活：
+    // - 还有剩余命 → 设置 RESPAWN_TIME 等待 spawner 安排复活
+    // - 没有剩余命 → respawn 标记为 -1.0，告诉 spawner 永久死亡，并触发全员阵亡判定
+    if player_id == 0 {
+        if stage.p1_lives > 0 {
+            stage.p1_lives -= 1;
+        }
+        stage.p1_respawn = if stage.p1_lives > 0 {
+            RESPAWN_TIME
+        } else {
+            -1.0
+        };
+    } else {
+        if stage.p2_lives > 0 {
+            stage.p2_lives -= 1;
+        }
+        stage.p2_respawn = if stage.p2_lives > 0 {
+            RESPAWN_TIME
+        } else {
+            -1.0
+        };
+    }
+}
+
+/// 返回值表示是否需要把 `save` 持久化到磁盘。
+/// 把 IO 副作用抽出来便于单测，避免测试污染真实存档。
 fn check_stage_completion(
     session: &mut GameSession,
     save: &mut SaveData,
     stage: &TankStage,
-) {
+) -> bool {
     if session.finished {
-        return;
+        return false;
     }
     if stage.kills >= STAGE_TOTAL_ENEMIES {
         session.finished = true;
@@ -214,8 +227,8 @@ fn check_stage_completion(
         let idx = session.kind.index();
         save.high_scores[idx] = save.high_scores[idx].max(session.score);
         save.unlocked_levels[idx] = save.unlocked_levels[idx].max((session.level + 1).min(10));
-        save.store();
         session.status = "通关！Enter 重玩，Esc 返回".to_string();
+        return true;
     } else if !stage.base_alive {
         session.finished = true;
         session.won = false;
@@ -223,5 +236,183 @@ fn check_stage_completion(
         session.finished = true;
         session.won = false;
         session.status = "全员阵亡！".to_string();
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::model::{GameKind, GameSession, SaveData};
+
+    fn fresh_stage() -> TankStage {
+        TankStage {
+            remaining_to_spawn: STAGE_TOTAL_ENEMIES,
+            spawn_timer: 0.0,
+            spawn_idx: 0,
+            stage_num: 1,
+            p1_lives: 2,
+            p2_lives: 2,
+            p1_respawn: 0.0,
+            p2_respawn: 0.0,
+            base_alive: true,
+            kills: 0,
+            two_player: false,
+            mode_selected: true,
+        }
+    }
+
+    fn fresh_session() -> GameSession {
+        GameSession {
+            kind: GameKind::Tank,
+            level: 1,
+            score: 0,
+            lives: 3,
+            paused: false,
+            finished: false,
+            won: false,
+            status: String::new(),
+        }
+    }
+
+    #[test]
+    fn player_death_consumes_one_life_and_arms_respawn() {
+        let mut stage = fresh_stage();
+        apply_player_death(&mut stage, 0);
+        assert_eq!(stage.p1_lives, 1);
+        assert!((stage.p1_respawn - RESPAWN_TIME).abs() < 1e-3);
+    }
+
+    #[test]
+    fn player_death_with_last_life_marks_permanent() {
+        let mut stage = fresh_stage();
+        stage.p1_lives = 1;
+        apply_player_death(&mut stage, 0);
+        // 唯一一条命用完后 lives 归零、respawn=-1，避免“假复活”和卡死
+        assert_eq!(stage.p1_lives, 0);
+        assert_eq!(stage.p1_respawn, -1.0);
+    }
+
+    #[test]
+    fn player_death_with_zero_lives_stays_permanent() {
+        let mut stage = fresh_stage();
+        stage.p1_lives = 0;
+        stage.p1_respawn = -1.0;
+        apply_player_death(&mut stage, 0);
+        assert_eq!(stage.p1_lives, 0);
+        assert_eq!(stage.p1_respawn, -1.0);
+    }
+
+    #[test]
+    fn player2_death_independent_from_player1() {
+        let mut stage = fresh_stage();
+        apply_player_death(&mut stage, 1);
+        assert_eq!(stage.p1_lives, 2);
+        assert_eq!(stage.p2_lives, 1);
+        assert!((stage.p2_respawn - RESPAWN_TIME).abs() < 1e-3);
+    }
+
+    #[test]
+    fn full_death_loop_ends_in_permanent_state() {
+        // 复现 bug：连续死亡直到 lives 归零，必须到达 respawn=-1 状态
+        let mut stage = fresh_stage();
+        stage.p1_lives = 2;
+        apply_player_death(&mut stage, 0); // lives 2 -> 1
+        apply_player_death(&mut stage, 0); // lives 1 -> 0
+        assert_eq!(stage.p1_lives, 0);
+        assert_eq!(stage.p1_respawn, -1.0);
+    }
+
+    #[test]
+    fn stage_completion_won_when_all_enemies_killed() {
+        let mut stage = fresh_stage();
+        stage.kills = STAGE_TOTAL_ENEMIES;
+        let mut session = fresh_session();
+        session.score = 250;
+        let mut save = SaveData::default();
+        let needs_save = check_stage_completion(&mut session, &mut save, &stage);
+        assert!(needs_save);
+        assert!(session.finished);
+        assert!(session.won);
+        // 通关后高分应被更新
+        assert_eq!(save.high_scores[GameKind::Tank.index()], 250);
+        // 下一关被解锁
+        assert!(save.unlocked_levels[GameKind::Tank.index()] >= 2);
+    }
+
+    #[test]
+    fn stage_completion_lost_when_base_destroyed() {
+        let mut stage = fresh_stage();
+        stage.base_alive = false;
+        let mut session = fresh_session();
+        let mut save = SaveData::default();
+        let needs_save = check_stage_completion(&mut session, &mut save, &stage);
+        assert!(!needs_save);
+        assert!(session.finished);
+        assert!(!session.won);
+    }
+
+    #[test]
+    fn stage_completion_lost_when_both_players_permanent_dead() {
+        let mut stage = fresh_stage();
+        stage.p1_respawn = -1.0;
+        stage.p2_respawn = -1.0;
+        let mut session = fresh_session();
+        let mut save = SaveData::default();
+        check_stage_completion(&mut session, &mut save, &stage);
+        assert!(session.finished);
+        assert!(!session.won);
+        assert!(session.status.contains("全员阵亡"));
+    }
+
+    #[test]
+    fn stage_completion_single_player_uses_p2_sentinel() {
+        let mut stage = fresh_stage();
+        stage.p1_respawn = -1.0;
+        stage.p2_respawn = -1.0;
+        stage.p2_lives = 0;
+        let mut session = fresh_session();
+        let mut save = SaveData::default();
+        check_stage_completion(&mut session, &mut save, &stage);
+        assert!(session.finished);
+    }
+
+    #[test]
+    fn stage_completion_in_progress_does_nothing() {
+        let stage = fresh_stage();
+        let mut session = fresh_session();
+        let snapshot_status = session.status.clone();
+        let mut save = SaveData::default();
+        let needs_save = check_stage_completion(&mut session, &mut save, &stage);
+        assert!(!needs_save);
+        assert!(!session.finished);
+        assert_eq!(session.status, snapshot_status);
+    }
+
+    #[test]
+    fn stage_completion_caps_unlocked_level_at_ten() {
+        let mut stage = fresh_stage();
+        stage.kills = STAGE_TOTAL_ENEMIES;
+        let mut session = fresh_session();
+        session.level = 10;
+        let mut save = SaveData::default();
+        check_stage_completion(&mut session, &mut save, &stage);
+        assert_eq!(save.unlocked_levels[GameKind::Tank.index()], 10);
+    }
+
+    #[test]
+    fn stage_completion_does_not_demote_save_progress() {
+        // 玩家从更高关回来打低关，不应回退已解锁的关卡或最高分
+        let mut stage = fresh_stage();
+        stage.kills = STAGE_TOTAL_ENEMIES;
+        let mut session = fresh_session();
+        session.level = 1;
+        session.score = 50;
+        let mut save = SaveData::default();
+        save.high_scores[GameKind::Tank.index()] = 999;
+        save.unlocked_levels[GameKind::Tank.index()] = 5;
+        check_stage_completion(&mut session, &mut save, &stage);
+        assert_eq!(save.high_scores[GameKind::Tank.index()], 999);
+        assert_eq!(save.unlocked_levels[GameKind::Tank.index()], 5);
     }
 }

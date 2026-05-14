@@ -13,4 +13,6 @@ pub struct TankStage {
     pub p2_respawn: f32,
     pub base_alive: bool,
     pub kills: u8,
+    pub two_player: bool,
+    pub mode_selected: bool,
 }

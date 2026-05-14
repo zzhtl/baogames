@@ -112,7 +112,13 @@ fn hurt_player(
     player: &mut BMPlayer,
 ) {
     commands.entity(entity).despawn();
-    if player.id == 0 {
+    apply_death(stage, player.id);
+}
+
+/// 把"扣一条命 + 安排复活"的纯逻辑剥出来便于单测。
+/// 约定：lives < 0 表示永久死亡；spawner 据此停止复活，exit 据此判定 game over。
+pub(super) fn apply_death(stage: &mut BMStage, player_id: usize) {
+    if player_id == 0 {
         stage.p1_lives -= 1;
         if stage.p1_lives >= 0 {
             stage.p1_respawn = BM_RESPAWN_TIME;
@@ -122,5 +128,63 @@ fn hurt_player(
         if stage.p2_lives >= 0 {
             stage.p2_respawn = BM_RESPAWN_TIME;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fresh_stage() -> BMStage {
+        BMStage {
+            level: 1,
+            time_left: 200.0,
+            p1_lives: 3,
+            p2_lives: 3,
+            p1_respawn: 0.0,
+            p2_respawn: 0.0,
+            all_enemies_dead_msg_shown: false,
+            status: String::new(),
+        }
+    }
+
+    #[test]
+    fn death_decrements_lives_and_arms_respawn() {
+        let mut s = fresh_stage();
+        apply_death(&mut s, 0);
+        assert_eq!(s.p1_lives, 2);
+        assert!((s.p1_respawn - BM_RESPAWN_TIME).abs() < 1e-3);
+        // p2 不受影响
+        assert_eq!(s.p2_lives, 3);
+        assert_eq!(s.p2_respawn, 0.0);
+    }
+
+    #[test]
+    fn last_life_still_arms_respawn() {
+        let mut s = fresh_stage();
+        s.p1_lives = 1;
+        apply_death(&mut s, 0);
+        // 减到 0 仍 >=0 → 允许复活
+        assert_eq!(s.p1_lives, 0);
+        assert!(s.p1_respawn > 0.0);
+    }
+
+    #[test]
+    fn lives_below_zero_does_not_arm_respawn() {
+        let mut s = fresh_stage();
+        s.p1_lives = 0;
+        apply_death(&mut s, 0);
+        // 减到 -1 → 永久死亡，不应再设置 respawn
+        assert_eq!(s.p1_lives, -1);
+        assert_eq!(s.p1_respawn, 0.0);
+    }
+
+    #[test]
+    fn death_affects_player2_independently() {
+        let mut s = fresh_stage();
+        apply_death(&mut s, 1);
+        assert_eq!(s.p2_lives, 2);
+        assert!(s.p2_respawn > 0.0);
+        assert_eq!(s.p1_lives, 3);
     }
 }

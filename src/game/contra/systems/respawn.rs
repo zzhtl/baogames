@@ -27,14 +27,9 @@ pub fn contra_player_respawn(
         player.dead_timer -= dt;
         if player.dead_timer <= 0.0 {
             if session.lives <= 0 {
-                session.finished = true;
-                session.won = false;
-                session.status = "GAME OVER  Enter 重玩 / Backspace 返回菜单".to_string();
-                let idx = session.kind.index();
-                if session.score > save.high_scores[idx] {
-                    save.high_scores[idx] = session.score;
+                if apply_game_over(&mut session, &mut save) {
+                    save.store();
                 }
-                save.store();
                 return;
             }
             let cam_x = cam_q
@@ -55,5 +50,82 @@ pub fn contra_player_respawn(
             player.prone = false;
             sprite.custom_size = Some(player_size(false));
         }
+    }
+}
+
+/// game over 时把分数同步到 SaveData。返回 true 表示需要持久化。
+fn apply_game_over(session: &mut GameSession, save: &mut SaveData) -> bool {
+    if session.finished {
+        return false;
+    }
+    session.finished = true;
+    session.won = false;
+    session.status = "GAME OVER  Enter 重玩 / Backspace 返回菜单".to_string();
+    let idx = session.kind.index();
+    if session.score > save.high_scores[idx] {
+        save.high_scores[idx] = session.score;
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::model::GameKind;
+
+    fn fresh_session() -> GameSession {
+        GameSession {
+            kind: GameKind::Contra,
+            level: 1,
+            score: 0,
+            lives: 0,
+            paused: false,
+            finished: false,
+            won: false,
+            status: String::new(),
+        }
+    }
+
+    #[test]
+    fn game_over_marks_session_lost() {
+        let mut session = fresh_session();
+        let mut save = SaveData::default();
+        apply_game_over(&mut session, &mut save);
+        assert!(session.finished);
+        assert!(!session.won);
+    }
+
+    #[test]
+    fn game_over_records_new_high_score() {
+        let mut session = fresh_session();
+        session.score = 2000;
+        let mut save = SaveData::default();
+        let dirty = apply_game_over(&mut session, &mut save);
+        assert!(dirty);
+        assert_eq!(save.high_scores[GameKind::Contra.index()], 2000);
+    }
+
+    #[test]
+    fn game_over_keeps_better_record() {
+        let mut session = fresh_session();
+        session.score = 100;
+        let mut save = SaveData::default();
+        save.high_scores[GameKind::Contra.index()] = 9999;
+        let dirty = apply_game_over(&mut session, &mut save);
+        assert!(!dirty);
+        assert_eq!(save.high_scores[GameKind::Contra.index()], 9999);
+    }
+
+    #[test]
+    fn game_over_idempotent() {
+        let mut session = fresh_session();
+        session.score = 500;
+        let mut save = SaveData::default();
+        let first = apply_game_over(&mut session, &mut save);
+        let second = apply_game_over(&mut session, &mut save);
+        assert!(first);
+        assert!(!second);
     }
 }

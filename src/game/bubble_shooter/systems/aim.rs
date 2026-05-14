@@ -82,8 +82,8 @@ pub fn bubble_aim_dots_update(
                 t.translation.x = p.x;
                 t.translation.y = p.y;
                 sp.color = if visible {
-                    let alpha = if hit { 0.25 } else { 0.7 - i as f32 * 0.06 };
-                    Color::srgba(0.92, 0.86, 1.0, alpha)
+                    let alpha = if hit { 0.3 } else { 0.85 - i as f32 * 0.07 };
+                    Color::srgba(0.55, 0.32, 0.72, alpha)
                 } else {
                     Color::srgba(0.0, 0.0, 0.0, 0.0)
                 };

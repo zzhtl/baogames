@@ -28,6 +28,7 @@ pub fn run() {
         .insert_resource(SelectedGame(GameKind::Tank))
         .insert_resource(SaveData::load())
         .init_resource::<UiFont>()
+        .init_resource::<bubble_shooter::BubbleAssets>()
         .init_state::<AppState>()
         .add_systems(Startup, setup_camera)
         .add_systems(OnEnter(AppState::Menu), setup_menu)
@@ -40,6 +41,12 @@ pub fn run() {
         )
         .add_systems(
             Update,
+            tank::tank_mode_select
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<tank::TankStage>),
+        )
+        .add_systems(
+            Update,
             (
                 tank::tank_player_input,
                 tank::tank_enemy_ai,
@@ -48,11 +55,13 @@ pub fn run() {
                 tank::tank_enemy_spawner,
                 tank::tank_spawn_effect,
                 tank::tank_player_respawn,
+                tank::tank_lifetime_tick,
                 tank::tank_hud_update,
             )
                 .chain()
                 .run_if(in_state(AppState::Playing))
-                .run_if(resource_exists::<tank::TankStage>),
+                .run_if(resource_exists::<tank::TankStage>)
+                .run_if(tank::tank_playing),
         )
         .add_systems(
             Update,
@@ -507,6 +516,7 @@ fn setup_game(
     selected: Res<SelectedGame>,
     save: Res<SaveData>,
     font: Res<UiFont>,
+    bubble_assets: Res<bubble_shooter::BubbleAssets>,
 ) {
     let level = save.unlocked_levels[selected.0.index()].clamp(1, 10);
     commands.insert_resource(GameSession {
@@ -535,7 +545,9 @@ fn setup_game(
             level,
             save.high_scores[GameKind::Contra.index()],
         ),
-        GameKind::BubbleBobble => bubble_shooter::setup_stage(&mut commands, &font, level),
+        GameKind::BubbleBobble => {
+            bubble_shooter::setup_stage(&mut commands, &bubble_assets, &font, level)
+        }
     }
 }
 
@@ -587,6 +599,7 @@ fn pause_and_result_input(
     selected: Res<SelectedGame>,
     save: Res<SaveData>,
     font: Res<UiFont>,
+    bubble_assets: Res<bubble_shooter::BubbleAssets>,
     game_entities: Query<Entity, With<GameEntity>>,
 ) {
     // 占位卡片：Esc 或 Backspace 直接回菜单
@@ -616,7 +629,7 @@ fn pause_and_result_input(
         for entity in &game_entities {
             commands.entity(entity).despawn();
         }
-        setup_game(commands, selected, save, font);
+        setup_game(commands, selected, save, font, bubble_assets);
     }
 }
 

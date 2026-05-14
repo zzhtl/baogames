@@ -17,6 +17,7 @@ mod systems;
 pub(super) use resources::TankStage;
 pub(super) use setup::setup_stage;
 pub(super) use systems::{
-    tank_bullet_update, tank_enemy_ai, tank_enemy_spawner, tank_hud_update, tank_movement,
-    tank_player_input, tank_player_respawn, tank_spawn_effect,
+    tank_bullet_update, tank_enemy_ai, tank_enemy_spawner, tank_hud_update, tank_lifetime_tick,
+    tank_mode_select, tank_movement, tank_player_input, tank_player_respawn, tank_playing,
+    tank_spawn_effect,
 };

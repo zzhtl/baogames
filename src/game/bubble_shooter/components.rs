@@ -48,17 +48,13 @@ pub struct BubbleHud;
 pub struct BubbleMessage;
 
 pub fn palette(idx: u8) -> Color {
+    // 更明快、更适合儿童的糖果色
     match idx {
-        0 => Color::srgb(0.94, 0.32, 0.32),
-        1 => Color::srgb(0.32, 0.55, 0.96),
-        2 => Color::srgb(0.34, 0.82, 0.42),
-        3 => Color::srgb(0.98, 0.88, 0.28),
-        4 => Color::srgb(0.82, 0.42, 0.96),
-        _ => Color::srgb(0.96, 0.6, 0.24),
+        0 => Color::srgb(1.00, 0.42, 0.50), // 草莓粉
+        1 => Color::srgb(0.40, 0.74, 1.00), // 天空蓝
+        2 => Color::srgb(0.50, 0.92, 0.55), // 嫩绿
+        3 => Color::srgb(1.00, 0.86, 0.38), // 蜂蜜黄
+        4 => Color::srgb(0.78, 0.58, 1.00), // 葡萄紫
+        _ => Color::srgb(1.00, 0.68, 0.36), // 蜜橘
     }
-}
-
-pub fn palette_dark(idx: u8) -> Color {
-    let c = palette(idx).to_srgba();
-    Color::srgb(c.red * 0.55, c.green * 0.55, c.blue * 0.55)
 }

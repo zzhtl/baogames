@@ -14,7 +14,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
     spawn_play_field(commands);
     spawn_map(commands);
     spawn_hud(commands, font, level);
-    spawn_initial_players(commands);
+    spawn_mode_select_ui(commands, font);
 
     commands.insert_resource(TankStage {
         remaining_to_spawn: STAGE_TOTAL_ENEMIES,
@@ -27,7 +27,70 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
         p2_respawn: 0.0,
         base_alive: true,
         kills: 0,
+        two_player: false,
+        mode_selected: false,
     });
+}
+
+fn spawn_mode_select_ui(commands: &mut Commands, font: &UiFont) {
+    let cx = PLAY_OFFSET_X;
+    let cy = PLAY_OFFSET_Y;
+    // 半透明黑底覆盖游戏区，避免地形分散注意力
+    commands.spawn((
+        Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.72), Vec2::splat(PLAY_SIZE)),
+        Transform::from_translation(Vec3::new(cx, cy, 50.0)),
+        ModeSelectUi,
+        GameEntity,
+    ));
+    text(
+        commands,
+        font,
+        "选择模式",
+        Vec2::new(cx, cy + 80.0),
+        34.0,
+        Color::srgb(1.0, 0.92, 0.5),
+        ModeSelectUi,
+    )
+    .insert(GameEntity);
+    text(
+        commands,
+        font,
+        "1  单人模式",
+        Vec2::new(cx, cy + 20.0),
+        24.0,
+        Color::srgb(0.85, 0.78, 0.36),
+        ModeSelectUi,
+    )
+    .insert(GameEntity);
+    text(
+        commands,
+        font,
+        "2  双人模式",
+        Vec2::new(cx, cy - 20.0),
+        24.0,
+        Color::srgb(0.46, 0.7, 0.95),
+        ModeSelectUi,
+    )
+    .insert(GameEntity);
+    text(
+        commands,
+        font,
+        "按 1 或 2 确认",
+        Vec2::new(cx, cy - 80.0),
+        16.0,
+        Color::srgb(0.75, 0.82, 0.92),
+        ModeSelectUi,
+    )
+    .insert(GameEntity);
+}
+
+pub fn spawn_initial_players_for_mode(commands: &mut Commands, two_player: bool) {
+    let p1_pos = tile_center(PLAYER1_SPAWN.0, PLAYER1_SPAWN.1);
+    spawn_player_tank(commands, 0, p1_pos);
+    if two_player {
+        let p2_pos = tile_center(PLAYER2_SPAWN.0, PLAYER2_SPAWN.1);
+        spawn_player_tank(commands, 1, p2_pos);
+    }
 }
 
 fn spawn_play_field(commands: &mut Commands) {
@@ -147,15 +210,10 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, level: u8) {
         18.0,
         Color::srgb(0.46, 0.7, 0.95),
         GameEntity,
-    );
+    )
+    .insert(P2Hud);
 }
 
-fn spawn_initial_players(commands: &mut Commands) {
-    let p1_pos = tile_center(PLAYER1_SPAWN.0, PLAYER1_SPAWN.1);
-    let p2_pos = tile_center(PLAYER2_SPAWN.0, PLAYER2_SPAWN.1);
-    spawn_player_tank(commands, 0, p1_pos);
-    spawn_player_tank(commands, 1, p2_pos);
-}
 
 // ========== 地形 ==========
 fn spawn_brick_tile(commands: &mut Commands, col: i32, row: i32) {
@@ -257,32 +315,32 @@ fn spawn_ice(commands: &mut Commands, col: i32, row: i32) {
 
 fn spawn_base(commands: &mut Commands, col: i32, row: i32) {
     let pos = tile_center(col, row);
-    // 底座
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.18, 0.18, 0.22), Vec2::splat(28.0)),
-        Transform::from_translation(pos.extend(Z_BASE)),
-        BaseFC,
-        Collider {
-            size: Vec2::splat(28.0),
-        },
-        GameEntity,
-    ));
-    // 鹰图标用三个色块拼
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.95, 0.85, 0.3), Vec2::new(18.0, 12.0)),
-        Transform::from_translation((pos + Vec2::new(0.0, 2.0)).extend(Z_BASE + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.95, 0.85, 0.3), Vec2::new(8.0, 6.0)),
-        Transform::from_translation((pos + Vec2::new(0.0, -6.0)).extend(Z_BASE + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.2, 0.2, 0.2), Vec2::new(3.0, 3.0)),
-        Transform::from_translation((pos + Vec2::new(4.0, 4.0)).extend(Z_BASE + 0.1)),
-        GameEntity,
-    ));
+    // 底座（鹰图标作为子实体，base 被 despawn 时会一起清理）
+    commands
+        .spawn((
+            Sprite::from_color(Color::srgb(0.18, 0.18, 0.22), Vec2::splat(28.0)),
+            Transform::from_translation(pos.extend(Z_BASE)),
+            BaseFC,
+            Collider {
+                size: Vec2::splat(28.0),
+            },
+            GameEntity,
+        ))
+        .with_children(|p| {
+            // 鹰图标用三个色块拼
+            p.spawn((
+                Sprite::from_color(Color::srgb(0.95, 0.85, 0.3), Vec2::new(18.0, 12.0)),
+                Transform::from_translation(Vec3::new(0.0, 2.0, 0.05)),
+            ));
+            p.spawn((
+                Sprite::from_color(Color::srgb(0.95, 0.85, 0.3), Vec2::new(8.0, 6.0)),
+                Transform::from_translation(Vec3::new(0.0, -6.0, 0.05)),
+            ));
+            p.spawn((
+                Sprite::from_color(Color::srgb(0.2, 0.2, 0.2), Vec2::new(3.0, 3.0)),
+                Transform::from_translation(Vec3::new(4.0, 4.0, 0.1)),
+            ));
+        });
 }
 
 // ========== 坦克与特效 ==========

@@ -16,7 +16,7 @@ pub fn tank_hud_update(
     }
     let Some(stage) = stage else { return };
     if let Ok(mut text) = hud.single_mut() {
-        let remaining = STAGE_TOTAL_ENEMIES - stage.kills;
+        let remaining = STAGE_TOTAL_ENEMIES.saturating_sub(stage.kills);
         **text = format!("{}", remaining);
     }
 }
