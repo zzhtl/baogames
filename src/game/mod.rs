@@ -6,6 +6,7 @@ mod bubble_shooter;
 mod contra;
 mod memory_match;
 mod model;
+mod sokoban;
 mod space_shooter;
 mod super_mario;
 mod tank;
@@ -198,6 +199,19 @@ pub fn run() {
                 .run_if(resource_exists::<memory_match::MemoryStage>),
         )
         .add_systems(
+            Update,
+            (
+                sokoban::sokoban_input,
+                sokoban::sokoban_render_sync,
+                sokoban::sokoban_box_visual_sync,
+                sokoban::sokoban_check_finish,
+                sokoban::sokoban_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<sokoban::SokobanStage>),
+        )
+        .add_systems(
             OnExit(AppState::Playing),
             (cleanup::<GameEntity>, cleanup_stage_resources),
         )
@@ -278,7 +292,7 @@ fn setup_menu(mut commands: Commands, save: Res<SaveData>, font: Res<UiFont>) {
     text(
         &mut commands,
         &font,
-        "BaoGames 7 合 1 经典合集",
+        "BaoGames 8 合 1 经典合集",
         Vec2::new(0.0, 215.0),
         34.0,
         Color::srgb(1.0, 0.94, 0.62),
@@ -296,7 +310,7 @@ fn setup_menu(mut commands: Commands, save: Res<SaveData>, font: Res<UiFont>) {
     text(
         &mut commands,
         &font,
-        "按 1-7 选择游戏，Enter 开始 / Esc 暂停",
+        "按 1-8 选择游戏，Enter 开始 / Esc 暂停",
         Vec2::new(0.0, 162.0),
         17.0,
         Color::srgb(0.85, 0.92, 1.0),
@@ -428,6 +442,7 @@ fn menu_accent(kind: GameKind) -> Color {
         GameKind::Contra => Color::srgb(0.92, 0.18, 0.10),
         GameKind::BubbleBobble => Color::srgb(0.9, 0.34, 0.78),
         GameKind::MemoryMatch => Color::srgb(0.36, 0.86, 0.86),
+        GameKind::Sokoban => Color::srgb(0.96, 0.78, 0.32),
     }
 }
 
@@ -444,6 +459,7 @@ fn menu_input(
         (KeyCode::Digit5, GameKind::Contra),
         (KeyCode::Digit6, GameKind::BubbleBobble),
         (KeyCode::Digit7, GameKind::MemoryMatch),
+        (KeyCode::Digit8, GameKind::Sokoban),
     ];
     for (key, kind) in choices {
         if keys.just_pressed(key) {
@@ -492,6 +508,11 @@ fn paint_stage_backdrop(commands: &mut Commands, kind: GameKind) {
             Color::srgb(0.06, 0.13, 0.18),
             Color::srgb(0.10, 0.20, 0.28),
             Color::srgb(0.40, 0.86, 0.86),
+        ),
+        GameKind::Sokoban => (
+            Color::srgb(0.10, 0.08, 0.06),
+            Color::srgb(0.18, 0.14, 0.10),
+            Color::srgb(0.96, 0.74, 0.32),
         ),
     };
 
@@ -570,6 +591,7 @@ fn setup_game(
             bubble_shooter::setup_stage(&mut commands, &bubble_assets, &font, level)
         }
         GameKind::MemoryMatch => memory_match::setup_stage(&mut commands, &font, level),
+        GameKind::Sokoban => sokoban::setup_stage(&mut commands, &font, level),
     }
 }
 
@@ -669,4 +691,5 @@ fn cleanup_stage_resources(mut commands: Commands) {
     commands.remove_resource::<contra::ContraStage>();
     commands.remove_resource::<bubble_shooter::BubbleStage>();
     commands.remove_resource::<memory_match::MemoryStage>();
+    commands.remove_resource::<sokoban::SokobanStage>();
 }

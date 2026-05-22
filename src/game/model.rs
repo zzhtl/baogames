@@ -20,10 +20,11 @@ pub(super) enum GameKind {
     Contra,
     BubbleBobble,
     MemoryMatch,
+    Sokoban,
 }
 
 impl GameKind {
-    pub(super) const ALL: [GameKind; 7] = [
+    pub(super) const ALL: [GameKind; 8] = [
         GameKind::Tank,
         GameKind::BombMaze,
         GameKind::SpaceShooter,
@@ -31,6 +32,7 @@ impl GameKind {
         GameKind::Contra,
         GameKind::BubbleBobble,
         GameKind::MemoryMatch,
+        GameKind::Sokoban,
     ];
 
     pub(super) fn index(self) -> usize {
@@ -42,6 +44,7 @@ impl GameKind {
             GameKind::Contra => 4,
             GameKind::BubbleBobble => 5,
             GameKind::MemoryMatch => 6,
+            GameKind::Sokoban => 7,
         }
     }
 
@@ -54,6 +57,7 @@ impl GameKind {
             GameKind::Contra => "5 魂斗罗",
             GameKind::BubbleBobble => "6 泡泡龙",
             GameKind::MemoryMatch => "7 记忆翻翻乐",
+            GameKind::Sokoban => "8 推箱子",
         }
     }
 
@@ -66,6 +70,7 @@ impl GameKind {
             GameKind::Contra => "8 方向射击，吃道具，击破要塞 BOSS",
             GameKind::BubbleBobble => "瞄准三连同色，清空所有泡泡！",
             GameKind::MemoryMatch => "翻开同样字符的两张牌，限时配对全部！",
+            GameKind::Sokoban => "把所有箱子推到目标点，从易到难十连关！",
         }
     }
 
@@ -79,6 +84,7 @@ impl GameKind {
                 | GameKind::Contra
                 | GameKind::BubbleBobble
                 | GameKind::MemoryMatch
+                | GameKind::Sokoban
         )
     }
 }
@@ -88,16 +94,16 @@ pub(super) struct SelectedGame(pub(super) GameKind);
 
 #[derive(Resource, Serialize, Deserialize)]
 pub(super) struct SaveData {
-    pub(super) high_scores: [u32; 7],
-    pub(super) unlocked_levels: [u8; 7],
+    pub(super) high_scores: [u32; 8],
+    pub(super) unlocked_levels: [u8; 8],
     volume: f32,
 }
 
 impl Default for SaveData {
     fn default() -> Self {
         Self {
-            high_scores: [0; 7],
-            unlocked_levels: [1; 7],
+            high_scores: [0; 8],
+            unlocked_levels: [1; 8],
             volume: 0.7,
         }
     }
