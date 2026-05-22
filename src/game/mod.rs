@@ -4,6 +4,7 @@ use bevy::window::WindowResolution;
 mod bomb_maze;
 mod bubble_shooter;
 mod contra;
+mod memory_match;
 mod model;
 mod space_shooter;
 mod super_mario;
@@ -184,6 +185,19 @@ pub fn run() {
                 .run_if(resource_exists::<bubble_shooter::BubbleStage>),
         )
         .add_systems(
+            Update,
+            (
+                memory_match::memory_input,
+                memory_match::memory_render_sync,
+                memory_match::memory_cursor_follow,
+                memory_match::memory_check_finish,
+                memory_match::memory_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<memory_match::MemoryStage>),
+        )
+        .add_systems(
             OnExit(AppState::Playing),
             (cleanup::<GameEntity>, cleanup_stage_resources),
         )
@@ -264,7 +278,7 @@ fn setup_menu(mut commands: Commands, save: Res<SaveData>, font: Res<UiFont>) {
     text(
         &mut commands,
         &font,
-        "BaoGames 6 合 1 经典合集",
+        "BaoGames 7 合 1 经典合集",
         Vec2::new(0.0, 215.0),
         34.0,
         Color::srgb(1.0, 0.94, 0.62),
@@ -282,7 +296,7 @@ fn setup_menu(mut commands: Commands, save: Res<SaveData>, font: Res<UiFont>) {
     text(
         &mut commands,
         &font,
-        "按 1-6 选择游戏，Enter 开始 / Esc 暂停",
+        "按 1-7 选择游戏，Enter 开始 / Esc 暂停",
         Vec2::new(0.0, 162.0),
         17.0,
         Color::srgb(0.85, 0.92, 1.0),
@@ -398,7 +412,7 @@ fn setup_menu(mut commands: Commands, save: Res<SaveData>, font: Res<UiFont>) {
         &mut commands,
         &font,
         "选好就按 Enter 出发吧！",
-        Vec2::new(0.0, -200.0),
+        Vec2::new(0.0, -244.0),
         17.0,
         Color::srgb(0.55, 0.7, 0.86),
         MenuEntity,
@@ -413,6 +427,7 @@ fn menu_accent(kind: GameKind) -> Color {
         GameKind::SuperMario => Color::srgb(0.92, 0.35, 0.28),
         GameKind::Contra => Color::srgb(0.92, 0.18, 0.10),
         GameKind::BubbleBobble => Color::srgb(0.9, 0.34, 0.78),
+        GameKind::MemoryMatch => Color::srgb(0.36, 0.86, 0.86),
     }
 }
 
@@ -428,6 +443,7 @@ fn menu_input(
         (KeyCode::Digit4, GameKind::SuperMario),
         (KeyCode::Digit5, GameKind::Contra),
         (KeyCode::Digit6, GameKind::BubbleBobble),
+        (KeyCode::Digit7, GameKind::MemoryMatch),
     ];
     for (key, kind) in choices {
         if keys.just_pressed(key) {
@@ -471,6 +487,11 @@ fn paint_stage_backdrop(commands: &mut Commands, kind: GameKind) {
             Color::srgb(0.08, 0.09, 0.17),
             Color::srgb(0.12, 0.16, 0.28),
             Color::srgb(0.88, 0.45, 0.78),
+        ),
+        GameKind::MemoryMatch => (
+            Color::srgb(0.06, 0.13, 0.18),
+            Color::srgb(0.10, 0.20, 0.28),
+            Color::srgb(0.40, 0.86, 0.86),
         ),
     };
 
@@ -548,6 +569,7 @@ fn setup_game(
         GameKind::BubbleBobble => {
             bubble_shooter::setup_stage(&mut commands, &bubble_assets, &font, level)
         }
+        GameKind::MemoryMatch => memory_match::setup_stage(&mut commands, &font, level),
     }
 }
 
@@ -646,4 +668,5 @@ fn cleanup_stage_resources(mut commands: Commands) {
     commands.remove_resource::<super_mario::MarioStage>();
     commands.remove_resource::<contra::ContraStage>();
     commands.remove_resource::<bubble_shooter::BubbleStage>();
+    commands.remove_resource::<memory_match::MemoryStage>();
 }

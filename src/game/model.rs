@@ -19,16 +19,18 @@ pub(super) enum GameKind {
     SuperMario,
     Contra,
     BubbleBobble,
+    MemoryMatch,
 }
 
 impl GameKind {
-    pub(super) const ALL: [GameKind; 6] = [
+    pub(super) const ALL: [GameKind; 7] = [
         GameKind::Tank,
         GameKind::BombMaze,
         GameKind::SpaceShooter,
         GameKind::SuperMario,
         GameKind::Contra,
         GameKind::BubbleBobble,
+        GameKind::MemoryMatch,
     ];
 
     pub(super) fn index(self) -> usize {
@@ -39,6 +41,7 @@ impl GameKind {
             GameKind::SuperMario => 3,
             GameKind::Contra => 4,
             GameKind::BubbleBobble => 5,
+            GameKind::MemoryMatch => 6,
         }
     }
 
@@ -50,6 +53,7 @@ impl GameKind {
             GameKind::SuperMario => "4 超级玛丽",
             GameKind::Contra => "5 魂斗罗",
             GameKind::BubbleBobble => "6 泡泡龙",
+            GameKind::MemoryMatch => "7 记忆翻翻乐",
         }
     }
 
@@ -61,6 +65,7 @@ impl GameKind {
             GameKind::SuperMario => "踩 Goomba、吃蘑菇、冲到旗杆下！",
             GameKind::Contra => "8 方向射击，吃道具，击破要塞 BOSS",
             GameKind::BubbleBobble => "瞄准三连同色，清空所有泡泡！",
+            GameKind::MemoryMatch => "翻开同样字符的两张牌，限时配对全部！",
         }
     }
 
@@ -73,6 +78,7 @@ impl GameKind {
                 | GameKind::SuperMario
                 | GameKind::Contra
                 | GameKind::BubbleBobble
+                | GameKind::MemoryMatch
         )
     }
 }
@@ -82,16 +88,16 @@ pub(super) struct SelectedGame(pub(super) GameKind);
 
 #[derive(Resource, Serialize, Deserialize)]
 pub(super) struct SaveData {
-    pub(super) high_scores: [u32; 6],
-    pub(super) unlocked_levels: [u8; 6],
+    pub(super) high_scores: [u32; 7],
+    pub(super) unlocked_levels: [u8; 7],
     volume: f32,
 }
 
 impl Default for SaveData {
     fn default() -> Self {
         Self {
-            high_scores: [0; 6],
-            unlocked_levels: [1; 6],
+            high_scores: [0; 7],
+            unlocked_levels: [1; 7],
             volume: 0.7,
         }
     }
