@@ -31,27 +31,96 @@ pub fn spawn_player(commands: &mut Commands, pos: Vec2) {
             GameEntity,
         ))
         .id();
-    let parts: [(f32, f32, f32, f32, Color); 14] = [
-        (0.0, 13.0, 12.0, 3.0, COLOR_PLAYER_HELMET),
-        (0.0, 11.0, 13.0, 2.0, COLOR_PLAYER_HELMET_DK),
-        (0.0, 8.0, 10.0, 4.0, COLOR_PLAYER_SKIN),
-        (3.0, 8.0, 2.0, 2.0, COLOR_PLAYER_HAIR),
-        (0.0, 2.0, 12.0, 7.0, COLOR_PLAYER_BODY),
-        (0.0, 5.0, 12.0, 2.0, COLOR_PLAYER_BODY_DK),
-        (-4.0, 0.0, 4.0, 4.0, COLOR_PLAYER_SKIN),
-        (4.0, 0.0, 4.0, 4.0, COLOR_PLAYER_SKIN),
-        (0.0, -3.0, 12.0, 2.0, COLOR_PLAYER_BOOT),
-        (-3.0, -8.0, 5.0, 7.0, COLOR_PLAYER_PANTS),
-        (3.0, -8.0, 5.0, 7.0, COLOR_PLAYER_PANTS),
-        (-3.0, -14.0, 5.0, 3.0, COLOR_PLAYER_BOOT),
-        (3.0, -14.0, 5.0, 3.0, COLOR_PLAYER_BOOT),
-        (10.0, 2.0, 14.0, 2.0, COLOR_PLAYER_GUN),
+    // 像素分层（局部坐标，Z 从下到上递增）：
+    //   描边层在 +0.04，色块在 +0.05~+0.09，装备细节在 +0.10
+    let parts: &[(f32, f32, f32, f32, Color, f32)] = &[
+        // ===== 头部 =====
+        // 头巾（红黄）— 横向贯穿头部上方
+        (0.0, 13.0, 14.0, 3.0, COLOR_PLAYER_HELMET, 0.06),
+        (0.0, 11.5, 14.0, 1.0, COLOR_PLAYER_HELMET_DK, 0.07),
+        // 头巾飘带（左侧）
+        (-7.0, 12.0, 3.0, 1.0, COLOR_PLAYER_HELMET, 0.07),
+        (-8.0, 11.0, 3.0, 1.0, COLOR_PLAYER_HELMET_DK, 0.07),
+        // 脸
+        (0.0, 9.0, 10.0, 4.0, COLOR_PLAYER_SKIN, 0.06),
+        // 头发（额前 + 鬓角）
+        (-3.0, 11.0, 4.0, 1.0, COLOR_PLAYER_HAIR, 0.07),
+        (-5.0, 9.5, 1.0, 2.0, COLOR_PLAYER_HAIR, 0.07),
+        // 脸阴影（右侧）
+        (3.0, 8.5, 4.0, 1.0, COLOR_PLAYER_SKIN_DK, 0.07),
+        // 眼睛（一格黑点）
+        (2.0, 10.0, 1.0, 1.0, COLOR_PLAYER_OUTLINE, 0.08),
+        // 颈部
+        (-1.0, 6.5, 4.0, 2.0, COLOR_PLAYER_SKIN, 0.06),
+
+        // ===== 躯干 =====
+        // 主体（绿背心）
+        (0.0, 2.5, 12.0, 7.0, COLOR_PLAYER_BODY, 0.06),
+        // 胸口阴影（右下）
+        (2.0, 1.0, 7.0, 4.0, COLOR_PLAYER_BODY_DK, 0.07),
+        // 腰带（横）
+        (0.0, -1.0, 12.0, 2.0, COLOR_PLAYER_BOOT, 0.08),
+        (0.0, -1.5, 12.0, 1.0, COLOR_PLAYER_OUTLINE, 0.085),
+        // 弹链（斜跨胸口的黄带）
+        (-4.0, 4.0, 3.0, 2.0, COLOR_PLAYER_BANDOLIER, 0.09),
+        (-2.0, 2.5, 3.0, 2.0, COLOR_PLAYER_BANDOLIER, 0.09),
+        (0.0, 1.0, 3.0, 2.0, COLOR_PLAYER_BANDOLIER, 0.09),
+        (2.0, -0.5, 3.0, 2.0, COLOR_PLAYER_BANDOLIER, 0.09),
+        // 弹链上的子弹（小黑点）
+        (-4.0, 4.0, 1.0, 1.0, COLOR_PLAYER_OUTLINE, 0.095),
+        (-2.0, 2.5, 1.0, 1.0, COLOR_PLAYER_OUTLINE, 0.095),
+        (0.0, 1.0, 1.0, 1.0, COLOR_PLAYER_OUTLINE, 0.095),
+        (2.0, -0.5, 1.0, 1.0, COLOR_PLAYER_OUTLINE, 0.095),
+        // 露出的胳膊：左臂自然垂下、右臂前伸持枪
+        (-6.0, 2.0, 3.0, 5.0, COLOR_PLAYER_SKIN, 0.07),
+        (-6.0, 0.0, 3.0, 2.0, COLOR_PLAYER_SKIN_DK, 0.075),
+        (6.0, 2.0, 3.0, 3.0, COLOR_PLAYER_SKIN, 0.07),
+
+        // ===== 腿 =====
+        // 裤子主体
+        (-3.0, -7.0, 5.0, 8.0, COLOR_PLAYER_PANTS, 0.06),
+        (3.0, -7.0, 5.0, 8.0, COLOR_PLAYER_PANTS, 0.06),
+        // 裤腿外侧阴影
+        (-4.5, -7.0, 1.5, 8.0, COLOR_PLAYER_PANTS_DK, 0.07),
+        (4.5, -7.0, 1.5, 8.0, COLOR_PLAYER_PANTS_DK, 0.07),
+        // 膝盖高光
+        (-3.0, -6.0, 3.0, 1.0, COLOR_PLAYER_PANTS_DK, 0.075),
+        (3.0, -6.0, 3.0, 1.0, COLOR_PLAYER_PANTS_DK, 0.075),
+        // 战靴
+        (-3.0, -13.0, 5.0, 3.0, COLOR_PLAYER_BOOT, 0.06),
+        (3.0, -13.0, 5.0, 3.0, COLOR_PLAYER_BOOT, 0.06),
+        (-3.0, -14.0, 5.0, 1.0, COLOR_PLAYER_OUTLINE, 0.07),
+        (3.0, -14.0, 5.0, 1.0, COLOR_PLAYER_OUTLINE, 0.07),
+
+        // ===== 步枪（朝右）：枪托 + 枪身 + 弹匣 + 枪管 =====
+        (8.5, 2.5, 3.0, 4.0, COLOR_PLAYER_BOOT, 0.10),    // 枪托
+        (12.0, 3.0, 6.0, 2.0, COLOR_PLAYER_GUN, 0.10),    // 枪身
+        (12.0, 3.5, 6.0, 1.0, COLOR_PLAYER_GUN_HI, 0.105),
+        (12.0, 1.5, 1.0, 2.0, COLOR_PLAYER_GUN, 0.10),    // 弹匣
+        (16.5, 3.0, 6.0, 1.0, COLOR_PLAYER_GUN, 0.10),    // 枪管
+        (19.5, 3.0, 2.0, 1.0, COLOR_PLAYER_OUTLINE, 0.105), // 枪口
+
+        // ===== 黑色轮廓描边（贴在最底层 +0.04）=====
+        // 头顶
+        (0.0, 14.5, 14.0, 1.0, COLOR_PLAYER_OUTLINE, 0.04),
+        // 脸两侧
+        (-5.5, 9.5, 1.0, 5.0, COLOR_PLAYER_OUTLINE, 0.04),
+        (5.5, 9.5, 1.0, 5.0, COLOR_PLAYER_OUTLINE, 0.04),
+        // 躯干两侧
+        (-6.5, 3.0, 1.0, 7.0, COLOR_PLAYER_OUTLINE, 0.04),
+        (6.5, 3.0, 1.0, 7.0, COLOR_PLAYER_OUTLINE, 0.04),
+        // 腿外侧
+        (-5.5, -7.0, 1.0, 8.0, COLOR_PLAYER_OUTLINE, 0.04),
+        (5.5, -7.0, 1.0, 8.0, COLOR_PLAYER_OUTLINE, 0.04),
+        // 靴底
+        (-3.0, -15.5, 5.0, 1.0, COLOR_PLAYER_OUTLINE, 0.04),
+        (3.0, -15.5, 5.0, 1.0, COLOR_PLAYER_OUTLINE, 0.04),
     ];
-    for (dx, dy, w, h, color) in parts {
+    for (dx, dy, w, h, color, dz) in parts.iter().copied() {
         commands
             .spawn((
                 Sprite::from_color(color, Vec2::new(w, h)),
-                Transform::from_translation(Vec3::new(dx, dy, Z_PLAYER + 0.05)),
+                Transform::from_translation(Vec3::new(dx, dy, Z_PLAYER + dz)),
                 GameEntity,
             ))
             .insert(ChildOf(parent));
@@ -91,23 +160,57 @@ pub fn spawn_enemy(commands: &mut Commands, mark: &EnemySpawnMark) {
             GameEntity,
         ))
         .id();
-    let parts: [(f32, f32, f32, f32, Color); 10] = [
-        (0.0, 11.0, 12.0, 3.0, COLOR_ENEMY_HAT),
-        (0.0, 9.0, 13.0, 2.0, COLOR_ROCK_OUT),
-        (0.0, 6.0, 10.0, 3.0, COLOR_ENEMY_SKIN),
-        (0.0, 1.0, 13.0, 7.0, body_color),
-        (0.0, 4.0, 13.0, 2.0, COLOR_ENEMY_RED),
-        (-3.0, -6.0, 5.0, 6.0, COLOR_ENEMY_PANTS),
-        (3.0, -6.0, 5.0, 6.0, COLOR_ENEMY_PANTS),
-        (-3.0, -12.0, 5.0, 4.0, COLOR_PLAYER_BOOT),
-        (3.0, -12.0, 5.0, 4.0, COLOR_PLAYER_BOOT),
-        (9.0, 2.0, 12.0, 2.0, COLOR_ENEMY_GUN),
+    let body_dark = match mark.kind {
+        EnemyKind::Soldier => COLOR_ENEMY_BODY_DK,
+        EnemyKind::Sniper => Color::srgb(0.40, 0.06, 0.06),
+        EnemyKind::Jumper => Color::srgb(0.10, 0.18, 0.60),
+    };
+    let parts: &[(f32, f32, f32, f32, Color, f32)] = &[
+        // 头盔
+        (0.0, 11.5, 12.0, 3.0, COLOR_ENEMY_HAT, 0.06),
+        (0.0, 13.0, 12.0, 1.0, COLOR_ENEMY_OUTLINE, 0.065),
+        (0.0, 10.0, 13.0, 1.0, COLOR_ENEMY_OUTLINE, 0.07),
+        // 脸
+        (0.0, 7.0, 10.0, 3.0, COLOR_ENEMY_SKIN, 0.06),
+        (3.0, 7.0, 4.0, 1.0, COLOR_PLAYER_SKIN_DK, 0.065),
+        (2.0, 8.0, 1.0, 1.0, COLOR_ENEMY_OUTLINE, 0.07),
+        // 颈
+        (-1.0, 5.0, 4.0, 1.0, COLOR_ENEMY_SKIN, 0.06),
+        // 躯干主体（红 / 蓝制服）
+        (0.0, 1.5, 13.0, 7.0, body_color, 0.06),
+        (3.0, 0.0, 6.0, 4.0, body_dark, 0.07),
+        // 肩章
+        (-5.0, 4.5, 3.0, 1.0, COLOR_ENEMY_HAT, 0.08),
+        (5.0, 4.5, 3.0, 1.0, COLOR_ENEMY_HAT, 0.08),
+        // 腰带
+        (0.0, -2.0, 13.0, 1.5, COLOR_PLAYER_BOOT, 0.08),
+        (0.0, -2.5, 13.0, 1.0, COLOR_ENEMY_OUTLINE, 0.085),
+        // 腿
+        (-3.0, -6.5, 5.0, 7.0, COLOR_ENEMY_PANTS, 0.06),
+        (3.0, -6.5, 5.0, 7.0, COLOR_ENEMY_PANTS, 0.06),
+        (-4.5, -6.5, 1.5, 7.0, COLOR_ENEMY_PANTS_DK, 0.07),
+        (4.5, -6.5, 1.5, 7.0, COLOR_ENEMY_PANTS_DK, 0.07),
+        // 靴
+        (-3.0, -12.0, 5.0, 3.0, COLOR_PLAYER_BOOT, 0.06),
+        (3.0, -12.0, 5.0, 3.0, COLOR_PLAYER_BOOT, 0.06),
+        (-3.0, -13.0, 5.0, 1.0, COLOR_ENEMY_OUTLINE, 0.07),
+        (3.0, -13.0, 5.0, 1.0, COLOR_ENEMY_OUTLINE, 0.07),
+        // 手 + 步枪
+        (6.5, 2.0, 3.0, 3.0, COLOR_ENEMY_SKIN, 0.07),
+        (10.0, 2.0, 8.0, 2.0, COLOR_ENEMY_GUN, 0.10),
+        (10.0, 2.5, 8.0, 1.0, COLOR_PLAYER_GUN_HI, 0.105),
+        (15.0, 2.0, 1.0, 1.0, COLOR_ENEMY_OUTLINE, 0.11),
+        // 描边
+        (-6.5, 2.5, 1.0, 7.0, COLOR_ENEMY_OUTLINE, 0.04),
+        (6.5, 2.5, 1.0, 7.0, COLOR_ENEMY_OUTLINE, 0.04),
+        (-5.5, -6.5, 1.0, 7.0, COLOR_ENEMY_OUTLINE, 0.04),
+        (5.5, -6.5, 1.0, 7.0, COLOR_ENEMY_OUTLINE, 0.04),
     ];
-    for (dx, dy, w, h, color) in parts {
+    for (dx, dy, w, h, color, dz) in parts.iter().copied() {
         commands
             .spawn((
                 Sprite::from_color(color, Vec2::new(w, h)),
-                Transform::from_translation(Vec3::new(dx, dy, Z_ENEMY + 0.05)),
+                Transform::from_translation(Vec3::new(dx, dy, Z_ENEMY + dz)),
                 GameEntity,
             ))
             .insert(ChildOf(parent));
