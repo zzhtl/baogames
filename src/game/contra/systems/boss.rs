@@ -7,6 +7,27 @@ use super::super::constants::*;
 use super::super::resources::ContraStage;
 use super::super::setup_actors::{spawn_enemy_bullet, spawn_explosion};
 
+/// Boss 血量阶段：1(>2/3) / 2(1/3~2/3) / 3(<1/3)，越低越凶。
+fn boss_phase(hp: i32, max_hp: i32) -> u8 {
+    let frac = hp as f32 / max_hp.max(1) as f32;
+    if frac > 0.66 {
+        1
+    } else if frac > 0.33 {
+        2
+    } else {
+        3
+    }
+}
+
+/// 各阶段炮塔射击间隔：阶段越高越密集。
+fn turret_cd_for_phase(phase: u8) -> f32 {
+    match phase {
+        1 => TURRET_FIRE_CD,
+        2 => TURRET_FIRE_CD * 0.62,
+        _ => TURRET_FIRE_CD * 0.40,
+    }
+}
+
 pub fn contra_boss_update(
     time: Res<Time>,
     mut session: ResMut<GameSession>,
@@ -49,6 +70,7 @@ pub fn contra_boss_update(
             }
             continue;
         }
+        let phase = boss_phase(boss.hp, stage.boss_hp);
         for (mut turret, ttr) in &mut turret_q {
             turret.fire_cd = (turret.fire_cd - dt).max(0.0);
             if turret.fire_cd <= 0.0 {
@@ -59,7 +81,11 @@ pub fn contra_boss_update(
                         dir = Vec2::new(-1.0, 0.0);
                     }
                     spawn_enemy_bullet(&mut commands, origin, dir);
-                    turret.fire_cd = TURRET_FIRE_CD;
+                    // 阶段 3：追加一发偏上的扇形弹，弹幕更密
+                    if phase >= 3 {
+                        spawn_enemy_bullet(&mut commands, origin, dir + Vec2::new(0.0, 70.0));
+                    }
+                    turret.fire_cd = turret_cd_for_phase(phase);
                 }
             }
         }
@@ -171,5 +197,15 @@ mod tests {
         save.unlocked_levels[GameKind::Contra.index()] = 10;
         let dirty = apply_boss_clear(&mut session, &mut save);
         assert!(!dirty);
+    }
+
+    #[test]
+    fn boss_phase_escalates_as_hp_drops() {
+        assert_eq!(boss_phase(30, 30), 1);
+        assert_eq!(boss_phase(18, 30), 2);
+        assert_eq!(boss_phase(5, 30), 3);
+        // 阶段越高炮塔射击越快
+        assert!(turret_cd_for_phase(3) < turret_cd_for_phase(2));
+        assert!(turret_cd_for_phase(2) < turret_cd_for_phase(1));
     }
 }

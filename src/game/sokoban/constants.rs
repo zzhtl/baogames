@@ -127,11 +127,15 @@ pub const BOARD_CENTER_Y: f32 = -20.0;
 pub const MOVE_COOLDOWN: f32 = 0.13;
 
 // 颜色
-pub const COLOR_WALL_BORDER: Color = Color::srgb(0.34, 0.24, 0.18);
-pub const COLOR_WALL_INNER: Color = Color::srgb(0.52, 0.36, 0.24);
+pub const COLOR_WALL_BORDER: Color = Color::srgb(0.30, 0.20, 0.14);
+pub const COLOR_WALL_INNER: Color = Color::srgb(0.56, 0.38, 0.24);
+pub const COLOR_WALL_HI: Color = Color::srgb(0.72, 0.52, 0.34);
+pub const COLOR_WALL_MORTAR: Color = Color::srgb(0.34, 0.22, 0.14);
 pub const COLOR_FLOOR: Color = Color::srgb(0.16, 0.20, 0.28);
-pub const COLOR_GOAL_BORDER: Color = Color::srgb(0.92, 0.46, 0.26);
+pub const COLOR_FLOOR_EDGE: Color = Color::srgb(0.12, 0.15, 0.22);
+pub const COLOR_GOAL_BORDER: Color = Color::srgb(0.95, 0.52, 0.28);
 pub const COLOR_GOAL_INNER: Color = Color::srgb(0.36, 0.20, 0.16);
+pub const COLOR_GOAL_GLOW: Color = Color::srgb(1.0, 0.80, 0.42);
 
 pub const COLOR_BOX_BORDER: Color = Color::srgb(0.74, 0.52, 0.22);
 pub const COLOR_BOX_INNER: Color = Color::srgb(0.92, 0.72, 0.34);

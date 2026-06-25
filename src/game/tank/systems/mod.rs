@@ -5,6 +5,7 @@ mod input;
 mod lifetime;
 mod mode_select;
 mod movement;
+mod powerup;
 mod spawner;
 
 pub use ai::tank_enemy_ai;
@@ -14,4 +15,5 @@ pub use input::tank_player_input;
 pub use lifetime::tank_lifetime_tick;
 pub use mode_select::{tank_mode_select, tank_playing};
 pub use movement::tank_movement;
+pub use powerup::{tank_freeze_tick, tank_powerup_pickup};
 pub use spawner::{tank_enemy_spawner, tank_player_respawn, tank_spawn_effect};

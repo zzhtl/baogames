@@ -3,8 +3,10 @@
 mod components;
 mod constants;
 mod geometry;
+pub mod palette;
 mod resources;
 mod setup;
+pub mod sprites;
 mod systems;
 
 pub(super) use resources::BMStage;

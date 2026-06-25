@@ -15,4 +15,5 @@ pub struct TankStage {
     pub kills: u8,
     pub two_player: bool,
     pub mode_selected: bool,
+    pub freeze_timer: f32,
 }

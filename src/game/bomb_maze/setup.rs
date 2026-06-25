@@ -3,12 +3,14 @@ use rand::prelude::*;
 use std::time::Duration;
 
 use crate::common::render::{UiFont, rect, text};
+use crate::common::sprite_def::SpriteDef;
 use crate::game::model::{Collider, GameEntity};
 
 use super::components::*;
 use super::constants::*;
 use super::geometry::{in_safe_zone, is_border, is_pillar, tile_center};
 use super::resources::BMStage;
+use super::sprites::*;
 
 // ========== 关卡建图 ==========
 pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
@@ -229,88 +231,65 @@ fn paint_field(commands: &mut Commands) {
     );
 }
 
+/// 按 SpriteDef 给父实体挂子块（与离线预览同源）。
+fn bm_def_children(commands: &mut Commands, parent: Entity, def: &SpriteDef) {
+    for p in def.parts {
+        commands
+            .spawn((
+                Sprite::from_color(p.color, Vec2::new(p.w, p.h)),
+                Transform::from_translation(Vec3::new(p.dx, p.dy, p.dz)),
+                GameEntity,
+            ))
+            .insert(ChildOf(parent));
+    }
+}
+
+fn enemy_def(kind: EnemyKind) -> &'static SpriteDef {
+    match kind {
+        EnemyKind::Balloom => &ENEMY_BALLOOM,
+        EnemyKind::Oneal => &ENEMY_ONEAL,
+        EnemyKind::Doll => &ENEMY_DOLL,
+        EnemyKind::Kondoria => &ENEMY_KONDORIA,
+    }
+}
+
 fn spawn_hard_wall(commands: &mut Commands, col: i32, row: i32) {
     let pos = tile_center(col, row);
-    // 主体灰
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.55, 0.58, 0.62), Vec2::splat(BM_TILE)),
-        Transform::from_translation(pos.extend(Z_TILE)),
-        BMHardWall,
-        BMTilePos { col, row },
-        GameEntity,
-    ));
-    // 高光（左上）
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.78, 0.82, 0.88), Vec2::new(BM_TILE - 4.0, 5.0)),
-        Transform::from_translation((pos + Vec2::new(0.0, BM_TILE * 0.5 - 4.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.78, 0.82, 0.88), Vec2::new(5.0, BM_TILE - 4.0)),
-        Transform::from_translation((pos + Vec2::new(-BM_TILE * 0.5 + 4.0, 0.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
-    // 阴影（右下）
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.30, 0.32, 0.36), Vec2::new(BM_TILE - 4.0, 4.0)),
-        Transform::from_translation((pos + Vec2::new(0.0, -BM_TILE * 0.5 + 3.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.30, 0.32, 0.36), Vec2::new(4.0, BM_TILE - 4.0)),
-        Transform::from_translation((pos + Vec2::new(BM_TILE * 0.5 - 3.0, 0.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(BM_TILE)),
+            Transform::from_translation(pos.extend(Z_TILE)),
+            BMHardWall,
+            BMTilePos { col, row },
+            GameEntity,
+        ))
+        .id();
+    bm_def_children(commands, parent, &HARD_WALL);
 }
 
 fn spawn_soft_wall(commands: &mut Commands, col: i32, row: i32, hides: HiddenItem) {
     let pos = tile_center(col, row);
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.74, 0.42, 0.18), Vec2::splat(BM_TILE - 1.0)),
-        Transform::from_translation(pos.extend(Z_TILE)),
-        BMSoftWall { hides },
-        BMTilePos { col, row },
-        Collider {
-            size: Vec2::splat(BM_TILE - 2.0),
-        },
-        GameEntity,
-    ));
-    // 砖缝
-    let line = Color::srgb(0.4, 0.22, 0.08);
-    commands.spawn((
-        Sprite::from_color(line, Vec2::new(BM_TILE - 4.0, 1.5)),
-        Transform::from_translation((pos + Vec2::new(0.0, BM_TILE * 0.25)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(line, Vec2::new(BM_TILE - 4.0, 1.5)),
-        Transform::from_translation((pos + Vec2::new(0.0, -BM_TILE * 0.25)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(line, Vec2::new(1.5, BM_TILE * 0.5)),
-        Transform::from_translation((pos + Vec2::new(BM_TILE * 0.25, 0.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(line, Vec2::new(1.5, BM_TILE * 0.5)),
-        Transform::from_translation((pos + Vec2::new(-BM_TILE * 0.25, 0.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(BM_TILE - 1.0)),
+            Transform::from_translation(pos.extend(Z_TILE)),
+            BMSoftWall { hides },
+            BMTilePos { col, row },
+            Collider {
+                size: Vec2::splat(BM_TILE - 2.0),
+            },
+            GameEntity,
+        ))
+        .id();
+    bm_def_children(commands, parent, &SOFT_WALL);
 }
 
 pub fn spawn_bm_player(commands: &mut Commands, id: usize, spawn: (i32, i32)) {
     let pos = tile_center(spawn.0, spawn.1);
-    let body_color = Color::srgb(0.95, 0.95, 0.98);
-    let head_color = if id == 0 {
-        Color::srgb(0.32, 0.55, 0.95)
-    } else {
-        Color::srgb(0.95, 0.42, 0.42)
-    };
-
-    commands
+    let def = if id == 0 { &BM_PLAYER1 } else { &BM_PLAYER2 };
+    let parent = commands
         .spawn((
-            Sprite::from_color(body_color, Vec2::splat(BM_PLAYER_SIZE)),
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(BM_PLAYER_SIZE)),
             Transform::from_translation(pos.extend(Z_ACTOR)),
             BMPlayer::new(id),
             Collider {
@@ -318,43 +297,17 @@ pub fn spawn_bm_player(commands: &mut Commands, id: usize, spawn: (i32, i32)) {
             },
             GameEntity,
         ))
-        .with_children(|p| {
-            // 头盔 / 帽子
-            p.spawn((
-                Sprite::from_color(head_color, Vec2::new(BM_PLAYER_SIZE - 4.0, 8.0)),
-                Transform::from_translation(Vec3::new(0.0, 7.0, 0.05)),
-            ));
-            // 面罩
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.2, 0.2, 0.2), Vec2::new(BM_PLAYER_SIZE - 8.0, 3.0)),
-                Transform::from_translation(Vec3::new(0.0, 3.0, 0.06)),
-            ));
-            // 腰带
-            p.spawn((
-                Sprite::from_color(head_color, Vec2::new(BM_PLAYER_SIZE - 4.0, 3.0)),
-                Transform::from_translation(Vec3::new(0.0, -4.0, 0.05)),
-            ));
-            // 双脚
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.25, 0.25, 0.3), Vec2::new(7.0, 5.0)),
-                Transform::from_translation(Vec3::new(-5.0, -BM_PLAYER_SIZE * 0.5 + 2.0, 0.05)),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.25, 0.25, 0.3), Vec2::new(7.0, 5.0)),
-                Transform::from_translation(Vec3::new(5.0, -BM_PLAYER_SIZE * 0.5 + 2.0, 0.05)),
-            ));
-        });
+        .id();
+    bm_def_children(commands, parent, def);
 }
 
 fn spawn_bm_enemy(commands: &mut Commands, col: i32, row: i32, kind: EnemyKind) {
     let pos = tile_center(col, row);
-    let body = kind.body_color();
     let mut rng = thread_rng();
     let dir = *Dir4::all().choose(&mut rng).unwrap();
-
-    commands
+    let parent = commands
         .spawn((
-            Sprite::from_color(body, Vec2::splat(BM_ENEMY_SIZE)),
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(BM_ENEMY_SIZE)),
             Transform::from_translation(pos.extend(Z_ACTOR - 0.05)),
             BMEnemy {
                 kind,
@@ -366,26 +319,8 @@ fn spawn_bm_enemy(commands: &mut Commands, col: i32, row: i32, kind: EnemyKind) 
             },
             GameEntity,
         ))
-        .with_children(|p| {
-            // 双眼
-            p.spawn((
-                Sprite::from_color(kind.eye_color(), Vec2::splat(5.0)),
-                Transform::from_translation(Vec3::new(-5.0, 4.0, 0.05)),
-            ));
-            p.spawn((
-                Sprite::from_color(kind.eye_color(), Vec2::splat(5.0)),
-                Transform::from_translation(Vec3::new(5.0, 4.0, 0.05)),
-            ));
-            // 瞳孔
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.05, 0.05, 0.05), Vec2::splat(2.0)),
-                Transform::from_translation(Vec3::new(-5.0, 4.0, 0.06)),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.05, 0.05, 0.05), Vec2::splat(2.0)),
-                Transform::from_translation(Vec3::new(5.0, 4.0, 0.06)),
-            ));
-        });
+        .id();
+    bm_def_children(commands, parent, enemy_def(kind));
 }
 
 pub fn spawn_bm_bomb(
@@ -397,9 +332,9 @@ pub fn spawn_bm_bomb(
     remote: bool,
 ) -> Entity {
     let pos = tile_center(col, row);
-    commands
+    let parent = commands
         .spawn((
-            Sprite::from_color(Color::srgb(0.08, 0.08, 0.1), Vec2::splat(BM_BOMB_SIZE)),
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(BM_BOMB_SIZE)),
             Transform::from_translation(pos.extend(Z_BOMB)),
             BMBomb {
                 fuse: Timer::new(
@@ -421,30 +356,15 @@ pub fn spawn_bm_bomb(
             },
             GameEntity,
         ))
-        .with_children(|p| {
-            // 高光
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.32, 0.32, 0.36), Vec2::splat(8.0)),
-                Transform::from_translation(Vec3::new(-5.0, 6.0, 0.05)),
-            ));
-            // 引线
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.5, 0.36, 0.18), Vec2::new(2.0, 6.0)),
-                Transform::from_translation(Vec3::new(0.0, BM_BOMB_SIZE * 0.5 + 1.0, 0.05)),
-            ));
-            // 火花
-            p.spawn((
-                Sprite::from_color(Color::srgb(1.0, 0.86, 0.32), Vec2::splat(4.0)),
-                Transform::from_translation(Vec3::new(0.0, BM_BOMB_SIZE * 0.5 + 5.0, 0.06)),
-            ));
-        })
-        .id()
+        .id();
+    bm_def_children(commands, parent, &BOMB_DEF);
+    parent
 }
 
-pub fn spawn_bm_flame(commands: &mut Commands, pos: Vec2, color: Color) {
-    commands
+pub fn spawn_bm_flame(commands: &mut Commands, pos: Vec2, _color: Color) {
+    let parent = commands
         .spawn((
-            Sprite::from_color(color, Vec2::splat(BM_FLAME_SIZE)),
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(BM_FLAME_SIZE)),
             Transform::from_translation(pos.extend(Z_FLAME)),
             BMFlame {
                 timer: Timer::new(Duration::from_secs_f32(BM_FLAME_LIFE), TimerMode::Once),
@@ -454,18 +374,8 @@ pub fn spawn_bm_flame(commands: &mut Commands, pos: Vec2, color: Color) {
             },
             GameEntity,
         ))
-        .with_children(|p| {
-            // 内核
-            p.spawn((
-                Sprite::from_color(Color::srgb(1.0, 0.95, 0.62), Vec2::splat(BM_FLAME_SIZE - 12.0)),
-                Transform::from_translation(Vec3::new(0.0, 0.0, 0.05)),
-            ));
-            // 中心点
-            p.spawn((
-                Sprite::from_color(Color::srgb(1.0, 1.0, 0.9), Vec2::splat(BM_FLAME_SIZE - 22.0)),
-                Transform::from_translation(Vec3::new(0.0, 0.0, 0.06)),
-            ));
-        });
+        .id();
+    bm_def_children(commands, parent, &FLAME_DEF);
 }
 
 pub fn spawn_bm_powerup(
@@ -500,38 +410,19 @@ pub fn spawn_bm_powerup(
 
 pub fn spawn_bm_exit(commands: &mut Commands, col: i32, row: i32) {
     let pos = tile_center(col, row);
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.16, 0.1, 0.22), Vec2::splat(BM_TILE - 6.0)),
-        Transform::from_translation(pos.extend(Z_ITEM)),
-        BMExit,
-        BMTilePos { col, row },
-        Collider {
-            size: Vec2::splat(BM_TILE - 8.0),
-        },
-        GameEntity,
-    ));
-    // 门廊
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.62, 0.45, 0.86), Vec2::new(BM_TILE - 14.0, BM_TILE - 14.0)),
-        Transform::from_translation(pos.extend(Z_ITEM + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.16, 0.1, 0.22), Vec2::new(BM_TILE - 18.0, BM_TILE - 18.0)),
-        Transform::from_translation(pos.extend(Z_ITEM + 0.1)),
-        GameEntity,
-    ));
-    // 上箭头
-    commands.spawn((
-        Sprite::from_color(Color::srgb(1.0, 0.95, 0.6), Vec2::new(3.0, 10.0)),
-        Transform::from_translation((pos + Vec2::new(0.0, 0.0)).extend(Z_ITEM + 0.15)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(1.0, 0.95, 0.6), Vec2::new(8.0, 3.0)),
-        Transform::from_translation((pos + Vec2::new(0.0, 4.0)).extend(Z_ITEM + 0.15)),
-        GameEntity,
-    ));
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(BM_TILE - 6.0)),
+            Transform::from_translation(pos.extend(Z_ITEM)),
+            BMExit,
+            BMTilePos { col, row },
+            Collider {
+                size: Vec2::splat(BM_TILE - 8.0),
+            },
+            GameEntity,
+        ))
+        .id();
+    bm_def_children(commands, parent, &EXIT_DEF);
 }
 
 // ========== HUD ==========

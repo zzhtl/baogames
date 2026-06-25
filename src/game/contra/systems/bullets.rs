@@ -78,6 +78,8 @@ pub fn contra_bullets_update(
         let bp = btr.translation.truncate();
         let bs = if matches!(bullet.weapon, Weapon::F) {
             Vec2::splat(FLAME_SIZE)
+        } else if matches!(bullet.weapon, Weapon::L) {
+            Vec2::splat(LASER_SIZE)
         } else if matches!(bullet.weapon, Weapon::S) {
             Vec2::splat(BULLET_BIG_SIZE)
         } else {
@@ -112,7 +114,7 @@ pub fn contra_bullets_update(
                 }
             }
             if hit_enemy {
-                if !matches!(bullet.weapon, Weapon::F | Weapon::S) {
+                if !matches!(bullet.weapon, Weapon::F | Weapon::S | Weapon::L) {
                     commands.entity(be).despawn();
                 }
                 continue;
@@ -136,7 +138,7 @@ pub fn contra_bullets_update(
                 }
             }
             if hit_t {
-                if !matches!(bullet.weapon, Weapon::F) {
+                if !matches!(bullet.weapon, Weapon::F | Weapon::L) {
                     commands.entity(be).despawn();
                 }
                 continue;

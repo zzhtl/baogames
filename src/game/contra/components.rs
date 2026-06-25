@@ -5,10 +5,11 @@ use super::palette::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Weapon {
-    M,
-    S,
-    F,
-    R,
+    M, // 机枪：基础连射
+    S, // 散弹：5 发扇形
+    F, // 火焰：穿透敌人
+    L, // 激光：穿透敌人与炮台的强力光束
+    R, // 急速：最快连射
 }
 
 impl Weapon {
@@ -17,6 +18,7 @@ impl Weapon {
             Weapon::M => FIRE_CD_M,
             Weapon::S => FIRE_CD_S,
             Weapon::F => FIRE_CD_F,
+            Weapon::L => FIRE_CD_L,
             Weapon::R => FIRE_CD_R,
         }
     }
@@ -25,6 +27,7 @@ impl Weapon {
             Weapon::M => COLOR_PICKUP_M,
             Weapon::S => COLOR_PICKUP_S,
             Weapon::F => COLOR_PICKUP_F,
+            Weapon::L => COLOR_PICKUP_L,
             Weapon::R => COLOR_PICKUP_R,
         }
     }
@@ -33,6 +36,7 @@ impl Weapon {
             Weapon::M => "M",
             Weapon::S => "S",
             Weapon::F => "F",
+            Weapon::L => "L",
             Weapon::R => "R",
         }
     }
@@ -43,6 +47,8 @@ pub enum EnemyKind {
     Soldier, // 跑步射击
     Sniper,  // 站立射击
     Jumper,  // 高处跳下后跑动
+    Heavy,   // 装甲兵：慢速冲锋、3 血
+    Gunner,  // 固定机枪手：原地快速点射、2 血
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -204,19 +210,20 @@ mod tests {
         assert_eq!(Weapon::M.fire_cd(), FIRE_CD_M);
         assert_eq!(Weapon::S.fire_cd(), FIRE_CD_S);
         assert_eq!(Weapon::F.fire_cd(), FIRE_CD_F);
+        assert_eq!(Weapon::L.fire_cd(), FIRE_CD_L);
         assert_eq!(Weapon::R.fire_cd(), FIRE_CD_R);
     }
 
     #[test]
     fn weapon_letters_distinct() {
-        let letters: Vec<&str> = [Weapon::M, Weapon::S, Weapon::F, Weapon::R]
+        let letters: Vec<&str> = [Weapon::M, Weapon::S, Weapon::F, Weapon::L, Weapon::R]
             .iter()
             .map(|w| w.letter())
             .collect();
-        // 4 个，全部不同
+        // 5 个，全部不同
         let mut sorted = letters.clone();
         sorted.sort();
         sorted.dedup();
-        assert_eq!(sorted.len(), 4);
+        assert_eq!(sorted.len(), 5);
     }
 }

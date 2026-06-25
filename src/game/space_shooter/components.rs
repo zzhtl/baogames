@@ -66,24 +66,6 @@ impl EnemyKind {
             EnemyKind::Boss => 5000,
         }
     }
-    pub fn body_color(self) -> Color {
-        match self {
-            EnemyKind::Scout => Color::srgb(0.92, 0.36, 0.4),
-            EnemyKind::Sniper => Color::srgb(0.96, 0.66, 0.3),
-            EnemyKind::Bomber => Color::srgb(0.42, 0.6, 0.36),
-            EnemyKind::Carrier => Color::srgb(0.92, 0.42, 0.86),
-            EnemyKind::Boss => Color::srgb(0.78, 0.32, 0.36),
-        }
-    }
-    pub fn accent_color(self) -> Color {
-        match self {
-            EnemyKind::Scout => Color::srgb(0.62, 0.16, 0.18),
-            EnemyKind::Sniper => Color::srgb(0.62, 0.32, 0.1),
-            EnemyKind::Bomber => Color::srgb(0.18, 0.34, 0.18),
-            EnemyKind::Carrier => Color::srgb(0.55, 0.18, 0.5),
-            EnemyKind::Boss => Color::srgb(0.32, 0.12, 0.16),
-        }
-    }
     pub fn initial_cd(self) -> f32 {
         match self {
             EnemyKind::Scout => 1.4,

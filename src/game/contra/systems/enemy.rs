@@ -76,6 +76,24 @@ pub fn contra_enemy_ai(
                     enemy.vel.x = enemy.facing * ENEMY_SPEED * 0.6;
                 }
             }
+            EnemyKind::Heavy => {
+                if let Some(pp) = player_pos {
+                    let dx = pp.x - pos.x;
+                    if dx.abs() > 24.0 {
+                        enemy.facing = dx.signum();
+                    }
+                }
+                enemy.vel.x = enemy.facing * ENEMY_SPEED * 0.7;
+            }
+            EnemyKind::Gunner => {
+                enemy.vel.x = 0.0;
+                if let Some(pp) = player_pos {
+                    enemy.facing = (pp.x - pos.x).signum();
+                    if enemy.facing == 0.0 {
+                        enemy.facing = -1.0;
+                    }
+                }
+            }
         }
 
         enemy.vel.y -= GRAVITY * dt;
@@ -139,6 +157,7 @@ pub fn contra_enemy_ai(
                     spawn_enemy_bullet(&mut commands, pos, dir);
                     enemy.fire_cd = match enemy.kind {
                         EnemyKind::Sniper => SNIPER_FIRE_CD,
+                        EnemyKind::Gunner => GUNNER_FIRE_CD,
                         _ => ENEMY_FIRE_CD,
                     };
                 } else {

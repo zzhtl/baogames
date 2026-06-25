@@ -34,9 +34,10 @@ pub fn tank_enemy_spawner(
         return;
     }
     let col = ENEMY_SPAWN_COLS[stage.spawn_idx % ENEMY_SPAWN_COLS.len()];
+    let kind = pick_enemy_kind(stage.spawn_idx, stage.stage_num);
     stage.spawn_idx += 1;
     let pos = tile_center(col, 0);
-    spawn_spawn_effect(&mut commands, pos, TankSide::Enemy, None);
+    spawn_spawn_effect(&mut commands, pos, TankSide::Enemy, None, Some(kind));
     stage.remaining_to_spawn -= 1;
     stage.spawn_timer = SPAWN_INTERVAL;
 }
@@ -62,7 +63,11 @@ pub fn tank_spawn_effect(
             let player_id = effect.player_id;
             commands.entity(entity).despawn();
             match side {
-                TankSide::Enemy => spawn_enemy_tank(&mut commands, pos),
+                TankSide::Enemy => spawn_enemy_tank(
+                    &mut commands,
+                    pos,
+                    effect.enemy_kind.unwrap_or(EnemyTankKind::Basic),
+                ),
                 TankSide::Player => {
                     if let Some(id) = player_id {
                         spawn_player_tank(&mut commands, id, pos);
@@ -92,12 +97,54 @@ pub fn tank_player_respawn(
 
     if !p1_alive && stage.p1_lives > 0 && stage.p1_respawn <= 0.0 && stage.p1_respawn != -1.0 {
         let pos = tile_center(PLAYER1_SPAWN.0, PLAYER1_SPAWN.1);
-        spawn_spawn_effect(&mut commands, pos, TankSide::Player, Some(0));
+        spawn_spawn_effect(&mut commands, pos, TankSide::Player, Some(0), None);
         stage.p1_respawn = RESPAWN_TIME;
     }
     if !p2_alive && stage.p2_lives > 0 && stage.p2_respawn <= 0.0 && stage.p2_respawn != -1.0 {
         let pos = tile_center(PLAYER2_SPAWN.0, PLAYER2_SPAWN.1);
-        spawn_spawn_effect(&mut commands, pos, TankSide::Player, Some(1));
+        spawn_spawn_effect(&mut commands, pos, TankSide::Player, Some(1), None);
         stage.p2_respawn = RESPAWN_TIME;
+    }
+}
+
+/// 按生成序号与关卡决定敌坦克兵种：多数普通，穿插快速/重炮，越靠后(关卡越高)越多装甲。
+fn pick_enemy_kind(idx: usize, stage_num: u8) -> EnemyTankKind {
+    let armor_from = (17usize.saturating_sub(stage_num as usize)).max(8);
+    if idx >= armor_from {
+        EnemyTankKind::Armor
+    } else if idx % 5 == 2 {
+        EnemyTankKind::Power
+    } else if idx % 3 == 1 {
+        EnemyTankKind::Fast
+    } else {
+        EnemyTankKind::Basic
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enemy_kinds_cover_all_four_over_a_stage() {
+        let kinds: Vec<EnemyTankKind> = (0..20).map(|i| pick_enemy_kind(i, 5)).collect();
+        for k in [
+            EnemyTankKind::Basic,
+            EnemyTankKind::Fast,
+            EnemyTankKind::Power,
+            EnemyTankKind::Armor,
+        ] {
+            assert!(kinds.contains(&k), "一关 20 只里应出现 {k:?}");
+        }
+    }
+
+    #[test]
+    fn higher_stage_has_more_armor() {
+        let armor = |stage| {
+            (0..20)
+                .filter(|&i| pick_enemy_kind(i, stage) == EnemyTankKind::Armor)
+                .count()
+        };
+        assert!(armor(7) > armor(1), "高关卡装甲坦克应更多");
     }
 }

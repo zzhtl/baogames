@@ -26,6 +26,7 @@ pub struct ContraStage {
     pub falcon_marks: Vec<FalconMark>,
     pub falcon_idx: usize,
     pub boss_x: f32,
+    pub boss_hp: i32,
     pub boss_spawned: bool,
     pub boss_dead: bool,
     pub top_score: u32,

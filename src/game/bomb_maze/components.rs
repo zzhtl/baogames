@@ -84,19 +84,6 @@ pub enum EnemyKind {
 }
 
 impl EnemyKind {
-    pub fn body_color(self) -> Color {
-        match self {
-            EnemyKind::Balloom => Color::srgb(0.85, 0.45, 0.85),
-            EnemyKind::Oneal => Color::srgb(0.95, 0.45, 0.32),
-            EnemyKind::Doll => Color::srgb(0.45, 0.85, 0.45),
-            EnemyKind::Kondoria => Color::srgb(0.55, 0.45, 0.78),
-        }
-    }
-
-    pub fn eye_color(self) -> Color {
-        Color::srgb(1.0, 1.0, 1.0)
-    }
-
     pub fn speed(self) -> f32 {
         match self {
             EnemyKind::Balloom => 50.0,

@@ -50,7 +50,7 @@ pub fn contra_spawner(
         stage.falcon_idx += 1;
     }
     if !stage.boss_spawned && cam_right >= stage.boss_x - 60.0 {
-        spawn_boss(&mut commands, stage.boss_x);
+        spawn_boss(&mut commands, stage.boss_x, stage.boss_hp);
         stage.boss_spawned = true;
     }
 }

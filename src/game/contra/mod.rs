@@ -1,11 +1,12 @@
 mod components;
 mod constants;
 mod geometry;
-mod palette;
+pub mod palette;
 mod resources;
 mod setup;
 mod setup_actors;
 mod setup_terrain;
+pub mod sprites;
 mod systems;
 
 pub(super) use resources::ContraStage;

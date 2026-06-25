@@ -1,15 +1,15 @@
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 
-mod bomb_maze;
+pub mod bomb_maze;
 mod bubble_shooter;
-mod contra;
+pub mod contra;
 mod memory_match;
 mod model;
 mod sokoban;
-mod space_shooter;
+pub mod space_shooter;
 mod super_mario;
-mod tank;
+pub mod tank;
 
 use crate::common::constants::{ARENA_H, ARENA_W, WINDOW_H, WINDOW_W};
 use crate::common::render::{UiFont, background_rect, panel, rect, text};
@@ -54,6 +54,8 @@ pub fn run() {
                 tank::tank_enemy_ai,
                 tank::tank_movement,
                 tank::tank_bullet_update,
+                tank::tank_powerup_pickup,
+                tank::tank_freeze_tick,
                 tank::tank_enemy_spawner,
                 tank::tank_spawn_effect,
                 tank::tank_player_respawn,

@@ -8,12 +8,12 @@ use super::constants::*;
 use super::palette::*;
 
 // 背景：夜空三段渐变 + 双密度星点（跟随相机）
-pub fn spawn_background(commands: &mut Commands) {
+pub fn spawn_background(commands: &mut Commands, sky_colors: [Color; 3]) {
     let sky_w = ARENA_W * 1.4;
     let sky_h = ARENA_H * 1.4;
     let sky = commands
         .spawn((
-            Sprite::from_color(COLOR_SKY, Vec2::new(sky_w, sky_h)),
+            Sprite::from_color(sky_colors[0], Vec2::new(sky_w, sky_h)),
             Transform::from_translation(Vec3::new(0.0, 0.0, Z_BG)),
             ContraBackground,
             GameEntity,
@@ -22,12 +22,12 @@ pub fn spawn_background(commands: &mut Commands) {
     // 渐变带：从底部最深到顶端最亮，分 6 段叠在天幕上方
     let band_h = sky_h * 0.18;
     let bands: [(f32, Color); 6] = [
-        (sky_h * 0.50, COLOR_SKY_HI),
-        (sky_h * 0.36, COLOR_SKY_HI),
-        (sky_h * 0.22, COLOR_SKY_MID),
-        (sky_h * 0.08, COLOR_SKY_MID),
-        (-sky_h * 0.06, COLOR_SKY),
-        (-sky_h * 0.20, COLOR_SKY),
+        (sky_h * 0.50, sky_colors[2]),
+        (sky_h * 0.36, sky_colors[2]),
+        (sky_h * 0.22, sky_colors[1]),
+        (sky_h * 0.08, sky_colors[1]),
+        (-sky_h * 0.06, sky_colors[0]),
+        (-sky_h * 0.20, sky_colors[0]),
     ];
     for (y, color) in bands {
         commands

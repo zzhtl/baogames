@@ -6,7 +6,20 @@ use super::super::components::*;
 use super::super::constants::{BULLET_SIZE, RESPAWN_TIME, STAGE_TOTAL_ENEMIES};
 use super::super::geometry::{aabb_overlap, play_max, play_min};
 use super::super::resources::TankStage;
-use super::super::setup::spawn_explosion;
+use super::super::setup::{spawn_explosion, spawn_powerup};
+
+/// 掉落道具种类：按累计击杀数与关卡循环 6 种。
+fn powerup_for(kills: u8, stage_num: u8) -> PowerUpKind {
+    const CYCLE: [PowerUpKind; 6] = [
+        PowerUpKind::Star,
+        PowerUpKind::Grenade,
+        PowerUpKind::Helmet,
+        PowerUpKind::Tank,
+        PowerUpKind::Clock,
+        PowerUpKind::Shovel,
+    ];
+    CYCLE[(kills as usize / 5 + stage_num as usize) % CYCLE.len()]
+}
 
 pub fn tank_bullet_update(
     mut commands: Commands,
@@ -173,6 +186,10 @@ pub fn tank_bullet_update(
             } else {
                 stage.kills += 1;
                 session.score += 100;
+                // 每累计 5 杀掉一个道具（最后一杀通关，不掉）
+                if stage.kills % 5 == 0 && stage.kills < STAGE_TOTAL_ENEMIES {
+                    spawn_powerup(&mut commands, pos, powerup_for(stage.kills, stage.stage_num));
+                }
             }
         }
     }
@@ -259,6 +276,7 @@ mod tests {
             kills: 0,
             two_player: false,
             mode_selected: true,
+            freeze_timer: 0.0,
         }
     }
 
@@ -414,5 +432,17 @@ mod tests {
         check_stage_completion(&mut session, &mut save, &stage);
         assert_eq!(save.high_scores[GameKind::Tank.index()], 999);
         assert_eq!(save.unlocked_levels[GameKind::Tank.index()], 5);
+    }
+
+    #[test]
+    fn powerup_cycle_covers_kinds_across_stages() {
+        let mut seen = std::collections::HashSet::new();
+        for stage in 1..=6u8 {
+            for k in (5..=15).step_by(5) {
+                seen.insert(format!("{:?}", powerup_for(k, stage)));
+            }
+        }
+        // 跨关卡应能见到全部 6 种道具
+        assert_eq!(seen.len(), 6);
     }
 }

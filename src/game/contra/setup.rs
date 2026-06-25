@@ -14,7 +14,7 @@ use super::setup_terrain::{
 };
 
 pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8, top_score: u32) {
-    spawn_background(commands);
+    spawn_background(commands, stage_sky(level));
     spawn_decor(commands);
 
     // FC 1-1 地形：左侧起点水域 + 陆地段之间用可踏木桥连接
@@ -40,7 +40,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8, top_score:
     spawn_player(commands, player_spawn);
 
     let falcon_marks = build_falcon_marks();
-    let spawn_marks = build_enemy_marks();
+    let spawn_marks = build_enemy_marks(level);
 
     spawn_hud(commands, font, level, top_score);
 
@@ -53,6 +53,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8, top_score:
         falcon_marks,
         falcon_idx: 0,
         boss_x: 4040.0,
+        boss_hp: stage_boss_hp(level),
         boss_spawned: false,
         boss_dead: false,
         top_score,
@@ -84,12 +85,86 @@ fn build_falcon_marks() -> Vec<FalconMark> {
             trigger_x: 3120.0,
             start: Vec2::new(2900.0, GROUND_TOP + TILE * 7.0),
             vx: FALCON_SPEED,
-            weapon: Weapon::S,
+            weapon: Weapon::L,
         },
     ]
 }
 
-fn build_enemy_marks() -> Vec<EnemySpawnMark> {
+/// 关卡天空主题色 [底, 中, 顶]：丛林夜 / 雪原冷调 / 要塞暗红，按关卡循环。
+fn stage_sky(level: u8) -> [Color; 3] {
+    match (level.max(1) - 1) % 3 {
+        0 => [COLOR_SKY, COLOR_SKY_MID, COLOR_SKY_HI],
+        1 => [
+            Color::srgb(0.10, 0.13, 0.20),
+            Color::srgb(0.18, 0.23, 0.33),
+            Color::srgb(0.30, 0.38, 0.50),
+        ],
+        _ => [
+            Color::srgb(0.10, 0.06, 0.07),
+            Color::srgb(0.18, 0.10, 0.11),
+            Color::srgb(0.30, 0.16, 0.15),
+        ],
+    }
+}
+
+/// Boss 血量随关卡线性增长。
+fn stage_boss_hp(level: u8) -> i32 {
+    BOSS_HP + (level as i32 - 1) * 8
+}
+
+/// 1 关沿用手工编排，2 关起按关卡程序化加压（更密、重型/机枪手更多）。
+fn build_enemy_marks(level: u8) -> Vec<EnemySpawnMark> {
+    if level <= 1 {
+        build_enemy_marks_l1()
+    } else {
+        build_enemy_marks_proc(level)
+    }
+}
+
+fn pick_enemy_kind(i: i32, level: u8) -> EnemyKind {
+    let pool: &[EnemyKind] = if level == 2 {
+        &[
+            EnemyKind::Soldier,
+            EnemyKind::Sniper,
+            EnemyKind::Gunner,
+            EnemyKind::Soldier,
+            EnemyKind::Jumper,
+            EnemyKind::Heavy,
+        ]
+    } else {
+        &[
+            EnemyKind::Soldier,
+            EnemyKind::Gunner,
+            EnemyKind::Heavy,
+            EnemyKind::Sniper,
+            EnemyKind::Jumper,
+            EnemyKind::Gunner,
+            EnemyKind::Heavy,
+        ]
+    };
+    pool[(i as usize) % pool.len()]
+}
+
+fn build_enemy_marks_proc(level: u8) -> Vec<EnemySpawnMark> {
+    let count = (16 + level as i32 * 3).min(42);
+    let x0 = 360.0;
+    let x1 = WORLD_W - 500.0;
+    let span = x1 - x0;
+    let denom = (count - 1).max(1) as f32;
+    (0..count)
+        .map(|i| {
+            let x = x0 + (i as f32 / denom) * span;
+            EnemySpawnMark {
+                trigger_x: (x - 340.0).max(0.0),
+                pos: Vec2::new(x, GROUND_TOP + ENEMY_H * 0.5),
+                kind: pick_enemy_kind(i, level),
+                facing: -1.0,
+            }
+        })
+        .collect()
+}
+
+fn build_enemy_marks_l1() -> Vec<EnemySpawnMark> {
     let mk = |trigger_x: f32, pos: Vec2, kind: EnemyKind| EnemySpawnMark {
         trigger_x,
         pos,
@@ -284,12 +359,13 @@ fn spawn_life_icon(commands: &mut Commands, offset: Vec2, z: f32, idx: i32) {
             GameEntity,
         ))
         .id();
+    // 小 Bill 头像：棕发 + 裸肩，与新版立绘一致
     let parts: [(f32, f32, f32, f32, Color); 5] = [
-        (0.0, 4.0, 9.0, 2.0, COLOR_PLAYER_HELMET),
-        (0.0, 2.5, 10.0, 1.0, COLOR_PLAYER_HELMET_DK),
-        (0.0, 0.0, 8.0, 3.0, COLOR_PLAYER_SKIN),
-        (-2.0, -2.5, 8.0, 1.0, COLOR_PLAYER_BODY),
-        (2.0, 0.0, 1.0, 1.0, COLOR_PLAYER_HAIR),
+        (0.0, 4.0, 8.0, 2.0, COLOR_PLAYER_HAIR),
+        (-3.0, 3.0, 2.0, 2.0, COLOR_PLAYER_HAIR),
+        (0.0, 0.5, 8.0, 4.0, COLOR_PLAYER_SKIN),
+        (2.0, 1.0, 1.0, 1.0, COLOR_PLAYER_OUTLINE),
+        (0.0, -3.0, 9.0, 2.0, COLOR_PLAYER_SKIN),
     ];
     for (dx, dy, w, h, color) in parts {
         commands
@@ -299,5 +375,54 @@ fn spawn_life_icon(commands: &mut Commands, offset: Vec2, z: f32, idx: i32) {
                 GameEntity,
             ))
             .insert(ChildOf(parent));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proc_marks_scale_and_stay_in_bounds() {
+        for level in 2u8..=8 {
+            let marks = build_enemy_marks(level);
+            assert!(!marks.is_empty(), "level {level} 无敌人");
+            for m in &marks {
+                assert!(
+                    m.pos.x >= 300.0 && m.pos.x <= WORLD_W - 400.0,
+                    "level {level} 敌人 x={} 越界",
+                    m.pos.x
+                );
+            }
+        }
+        assert!(
+            build_enemy_marks(6).len() > build_enemy_marks(2).len(),
+            "关卡越高敌人应越多"
+        );
+    }
+
+    #[test]
+    fn high_level_uses_all_enemy_kinds() {
+        let kinds: Vec<EnemyKind> = build_enemy_marks(3).iter().map(|m| m.kind).collect();
+        for k in [
+            EnemyKind::Soldier,
+            EnemyKind::Sniper,
+            EnemyKind::Jumper,
+            EnemyKind::Heavy,
+            EnemyKind::Gunner,
+        ] {
+            assert!(kinds.contains(&k), "3 关应出现 {k:?}");
+        }
+    }
+
+    #[test]
+    fn boss_hp_grows_with_level() {
+        assert_eq!(stage_boss_hp(1), BOSS_HP);
+        assert!(stage_boss_hp(5) > stage_boss_hp(1));
+    }
+
+    #[test]
+    fn level_one_keeps_handcrafted_layout() {
+        assert_eq!(build_enemy_marks(1).len(), build_enemy_marks_l1().len());
     }
 }

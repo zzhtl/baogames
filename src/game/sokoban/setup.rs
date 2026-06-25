@@ -112,50 +112,42 @@ pub fn parse_level(
     (cols, rows, tiles, boxes, player)
 }
 
+fn soko_rect(commands: &mut Commands, pos: Vec2, size: Vec2, color: Color, z: f32) {
+    commands.spawn((
+        Sprite::from_color(color, size),
+        Transform::from_translation(pos.extend(z)),
+        SokoTileSprite,
+        GameEntity,
+    ));
+}
+
 fn spawn_tile(commands: &mut Commands, center: Vec2, size: f32, tile: Tile) {
     match tile {
         Tile::Wall => {
-            commands.spawn((
-                Sprite::from_color(COLOR_WALL_BORDER, Vec2::splat(size)),
-                Transform::from_translation(center.extend(0.0)),
-                SokoTileSprite,
-                GameEntity,
-            ));
-            commands.spawn((
-                Sprite::from_color(COLOR_WALL_INNER, Vec2::splat(size - 6.0)),
-                Transform::from_translation(center.extend(0.05)),
-                SokoTileSprite,
-                GameEntity,
-            ));
+            // 砖墙：暗边 + 砖面 + 错位砖缝 + 顶高光
+            soko_rect(commands, center, Vec2::splat(size), COLOR_WALL_BORDER, 0.0);
+            soko_rect(commands, center, Vec2::splat(size - 4.0), COLOR_WALL_INNER, 0.05);
+            let m = 1.6;
+            soko_rect(commands, center + Vec2::new(0.0, size * 0.17), Vec2::new(size - 4.0, m), COLOR_WALL_MORTAR, 0.06);
+            soko_rect(commands, center + Vec2::new(0.0, -size * 0.17), Vec2::new(size - 4.0, m), COLOR_WALL_MORTAR, 0.06);
+            soko_rect(commands, center + Vec2::new(0.0, size * 0.33), Vec2::new(m, size * 0.28), COLOR_WALL_MORTAR, 0.06);
+            soko_rect(commands, center + Vec2::new(-size * 0.25, 0.0), Vec2::new(m, size * 0.28), COLOR_WALL_MORTAR, 0.06);
+            soko_rect(commands, center + Vec2::new(size * 0.25, 0.0), Vec2::new(m, size * 0.28), COLOR_WALL_MORTAR, 0.06);
+            soko_rect(commands, center + Vec2::new(0.0, -size * 0.33), Vec2::new(m, size * 0.28), COLOR_WALL_MORTAR, 0.06);
+            soko_rect(commands, center + Vec2::new(0.0, size * 0.42), Vec2::new(size - 6.0, 2.0), COLOR_WALL_HI, 0.07);
         }
         Tile::Floor => {
-            commands.spawn((
-                Sprite::from_color(COLOR_FLOOR, Vec2::splat(size - 2.0)),
-                Transform::from_translation(center.extend(0.0)),
-                SokoTileSprite,
-                GameEntity,
-            ));
+            soko_rect(commands, center, Vec2::splat(size), COLOR_FLOOR_EDGE, 0.0);
+            soko_rect(commands, center, Vec2::splat(size - 3.0), COLOR_FLOOR, 0.02);
         }
         Tile::Goal => {
-            commands.spawn((
-                Sprite::from_color(COLOR_FLOOR, Vec2::splat(size - 2.0)),
-                Transform::from_translation(center.extend(0.0)),
-                SokoTileSprite,
-                GameEntity,
-            ));
-            let dot = size * 0.35;
-            commands.spawn((
-                Sprite::from_color(COLOR_GOAL_BORDER, Vec2::splat(dot + 4.0)),
-                Transform::from_translation(center.extend(0.1)),
-                SokoTileSprite,
-                GameEntity,
-            ));
-            commands.spawn((
-                Sprite::from_color(COLOR_GOAL_INNER, Vec2::splat(dot)),
-                Transform::from_translation(center.extend(0.15)),
-                SokoTileSprite,
-                GameEntity,
-            ));
+            soko_rect(commands, center, Vec2::splat(size), COLOR_FLOOR_EDGE, 0.0);
+            soko_rect(commands, center, Vec2::splat(size - 3.0), COLOR_FLOOR, 0.02);
+            // 靶心：外环 + 内圈 + 发光中心
+            let d = size * 0.5;
+            soko_rect(commands, center, Vec2::splat(d + 4.0), COLOR_GOAL_BORDER, 0.1);
+            soko_rect(commands, center, Vec2::splat(d), COLOR_GOAL_INNER, 0.12);
+            soko_rect(commands, center, Vec2::splat(d * 0.45), COLOR_GOAL_GLOW, 0.14);
         }
     }
 }
@@ -189,22 +181,28 @@ fn spawn_box(commands: &mut Commands, center: Vec2, size: f32, index: usize, on_
         GameEntity,
         ChildOf(parent),
     ));
-    // 中央十字花纹
-    let bar = (box_size - 8.0) * 0.6;
-    commands.spawn((
-        Sprite::from_color(border, Vec2::new(bar, 3.0)),
-        Transform::from_xyz(0.0, 0.0, 0.7),
-        SokoBoxBorder,
-        GameEntity,
-        ChildOf(parent),
-    ));
-    commands.spawn((
-        Sprite::from_color(border, Vec2::new(3.0, bar)),
-        Transform::from_xyz(0.0, 0.0, 0.7),
-        SokoBoxBorder,
-        GameEntity,
-        ChildOf(parent),
-    ));
+    // 木箱：横向木纹 + 四角金属包边（都随 border 变色，完成时整体变绿）
+    let iw = box_size - 8.0;
+    for dy in [iw * 0.30, -iw * 0.30] {
+        commands.spawn((
+            Sprite::from_color(border, Vec2::new(iw, 2.5)),
+            Transform::from_xyz(0.0, dy, 0.7),
+            SokoBoxBorder,
+            GameEntity,
+            ChildOf(parent),
+        ));
+    }
+    let corner = box_size * 0.20;
+    let off = box_size * 0.5 - corner * 0.5 - 2.0;
+    for (sx, sy) in [(-1.0, 1.0), (1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)] {
+        commands.spawn((
+            Sprite::from_color(border, Vec2::splat(corner)),
+            Transform::from_xyz(sx * off, sy * off, 0.72),
+            SokoBoxBorder,
+            GameEntity,
+            ChildOf(parent),
+        ));
+    }
 }
 
 fn spawn_player(commands: &mut Commands, center: Vec2, size: f32) {

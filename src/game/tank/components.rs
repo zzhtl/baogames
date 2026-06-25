@@ -72,9 +72,20 @@ pub struct PlayerTankFC {
     pub id: usize,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EnemyTankKind {
+    Basic, // 普通
+    Fast,  // 快速：移动更快
+    Power, // 重炮：子弹更快
+    Armor, // 装甲：3 血
+}
+
 #[derive(Component)]
 pub struct EnemyTankFC {
     pub turn_timer: f32,
+    // 供后续道具掉落 / 装甲受损表现使用
+    #[allow(dead_code)]
+    pub kind: EnemyTankKind,
 }
 
 #[derive(Component)]
@@ -105,12 +116,28 @@ pub struct BulletFC {
     pub owner: Option<Entity>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PowerUpKind {
+    Star,    // 升级：多发子弹 + 更快
+    Grenade, // 手雷：清掉在场敌人
+    Helmet,  // 头盔：获得护盾
+    Tank,    // 加命：+1 条命
+    Clock,   // 时钟：冻结敌人
+    Shovel,  // 铲子：基地周围筑钢墙
+}
+
+#[derive(Component)]
+pub struct PowerUp {
+    pub kind: PowerUpKind,
+}
+
 #[derive(Component)]
 pub struct SpawnEffect {
     pub timer: Timer,
     pub spawn_pos: Vec2,
     pub side: TankSide,
     pub player_id: Option<usize>,
+    pub enemy_kind: Option<EnemyTankKind>,
 }
 
 #[derive(Component)]

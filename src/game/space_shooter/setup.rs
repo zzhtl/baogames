@@ -3,11 +3,15 @@ use rand::prelude::*;
 use std::time::Duration;
 
 use crate::common::render::{UiFont, panel, rect, text};
+use crate::common::sprite_def::SpriteDef;
 use crate::game::model::{Collider, GameEntity, Lifetime};
 
 use super::components::*;
 use super::constants::*;
 use super::resources::SpaceState;
+use super::sprites::{
+    ENEMY_BOMBER, ENEMY_BOSS, ENEMY_CARRIER, ENEMY_SCOUT, ENEMY_SNIPER, POWERUP_P, SHIP_PLAYER,
+};
 use super::waves::build_wave;
 
 pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
@@ -180,10 +184,33 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont) {
     )));
 }
 
+/// 按 SpriteDef 给父实体挂子块（与离线预览同源）。
+fn spawn_def_children(commands: &mut Commands, parent: Entity, def: &SpriteDef) {
+    for p in def.parts {
+        commands
+            .spawn((
+                Sprite::from_color(p.color, Vec2::new(p.w, p.h)),
+                Transform::from_translation(Vec3::new(p.dx, p.dy, p.dz)),
+                GameEntity,
+            ))
+            .insert(ChildOf(parent));
+    }
+}
+
+fn enemy_def(kind: EnemyKind) -> &'static SpriteDef {
+    match kind {
+        EnemyKind::Scout => &ENEMY_SCOUT,
+        EnemyKind::Sniper => &ENEMY_SNIPER,
+        EnemyKind::Bomber => &ENEMY_BOMBER,
+        EnemyKind::Carrier => &ENEMY_CARRIER,
+        EnemyKind::Boss => &ENEMY_BOSS,
+    }
+}
+
 pub fn spawn_player_ship(commands: &mut Commands, pos: Vec2) {
-    commands
+    let parent = commands
         .spawn((
-            Sprite::from_color(Color::srgb(0.4, 0.82, 0.98), Vec2::new(18.0, 30.0)),
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), SHIP_PLAYER.size),
             Transform::from_translation(pos.extend(Z_PLAYER)),
             GameEntity,
             SpaceShipPlayer {
@@ -195,28 +222,8 @@ pub fn spawn_player_ship(commands: &mut Commands, pos: Vec2) {
                 size: Vec2::new(14.0, 22.0),
             },
         ))
-        .with_children(|p| {
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.32, 0.7, 0.92), Vec2::new(36.0, 8.0)),
-                Transform::from_xyz(0.0, -4.0, 0.0),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.28, 0.6, 0.85), Vec2::new(28.0, 5.0)),
-                Transform::from_xyz(0.0, -10.0, 0.0),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.85, 0.95, 1.0), Vec2::new(6.0, 10.0)),
-                Transform::from_xyz(0.0, 12.0, 0.01),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.18, 0.28, 0.42), Vec2::new(8.0, 10.0)),
-                Transform::from_xyz(0.0, 2.0, 0.01),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(1.0, 0.78, 0.32), Vec2::new(10.0, 6.0)),
-                Transform::from_xyz(0.0, -16.0, 0.01),
-            ));
-        });
+        .id();
+    spawn_def_children(commands, parent, &SHIP_PLAYER);
 }
 
 pub fn spawn_enemy(
@@ -225,12 +232,9 @@ pub fn spawn_enemy(
     pos: Vec2,
     drops_power: bool,
 ) -> Entity {
-    let size = kind.size();
-    let body = kind.body_color();
-    let accent = kind.accent_color();
-    commands
+    let parent = commands
         .spawn((
-            Sprite::from_color(body, size),
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), kind.size()),
             Transform::from_translation(pos.extend(Z_ENEMY)),
             GameEntity,
             SpaceEnemy {
@@ -244,91 +248,9 @@ pub fn spawn_enemy(
             },
             Collider { size: kind.collider() },
         ))
-        .with_children(|p| match kind {
-            EnemyKind::Scout => {
-                p.spawn((
-                    Sprite::from_color(accent, Vec2::new(20.0, 6.0)),
-                    Transform::from_xyz(0.0, -4.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(Color::srgb(0.96, 0.78, 0.42), Vec2::new(6.0, 6.0)),
-                    Transform::from_xyz(0.0, 4.0, 0.01),
-                ));
-            }
-            EnemyKind::Sniper => {
-                p.spawn((
-                    Sprite::from_color(accent, Vec2::new(34.0, 6.0)),
-                    Transform::from_xyz(0.0, -6.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(Color::srgb(0.96, 0.86, 0.4), Vec2::new(8.0, 8.0)),
-                    Transform::from_xyz(0.0, 0.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(accent, Vec2::new(4.0, 10.0)),
-                    Transform::from_xyz(-12.0, -8.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(accent, Vec2::new(4.0, 10.0)),
-                    Transform::from_xyz(12.0, -8.0, 0.01),
-                ));
-            }
-            EnemyKind::Bomber => {
-                p.spawn((
-                    Sprite::from_color(accent, Vec2::new(54.0, 8.0)),
-                    Transform::from_xyz(0.0, -10.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(Color::srgb(0.7, 0.86, 0.5), Vec2::new(12.0, 12.0)),
-                    Transform::from_xyz(0.0, 6.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(Color::srgb(0.18, 0.32, 0.18), Vec2::new(10.0, 6.0)),
-                    Transform::from_xyz(-18.0, -16.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(Color::srgb(0.18, 0.32, 0.18), Vec2::new(10.0, 6.0)),
-                    Transform::from_xyz(18.0, -16.0, 0.01),
-                ));
-            }
-            EnemyKind::Carrier => {
-                p.spawn((
-                    Sprite::from_color(accent, Vec2::new(28.0, 8.0)),
-                    Transform::from_xyz(0.0, -6.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(Color::srgb(1.0, 0.96, 0.52), Vec2::new(10.0, 10.0)),
-                    Transform::from_xyz(0.0, 2.0, 0.01),
-                ));
-            }
-            EnemyKind::Boss => {
-                p.spawn((
-                    Sprite::from_color(accent, Vec2::new(170.0, 22.0)),
-                    Transform::from_xyz(0.0, -28.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(Color::srgb(0.92, 0.5, 0.5), Vec2::new(40.0, 16.0)),
-                    Transform::from_xyz(0.0, 8.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(Color::srgb(0.36, 0.18, 0.2), Vec2::new(60.0, 8.0)),
-                    Transform::from_xyz(0.0, -42.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(accent, Vec2::new(28.0, 28.0)),
-                    Transform::from_xyz(-66.0, -10.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(accent, Vec2::new(28.0, 28.0)),
-                    Transform::from_xyz(66.0, -10.0, 0.01),
-                ));
-                p.spawn((
-                    Sprite::from_color(Color::srgb(0.95, 0.86, 0.48), Vec2::new(18.0, 18.0)),
-                    Transform::from_xyz(0.0, 18.0, 0.02),
-                ));
-            }
-        })
-        .id()
+        .id();
+    spawn_def_children(commands, parent, enemy_def(kind));
+    parent
 }
 
 pub fn spawn_bullet(
@@ -356,28 +278,16 @@ pub fn spawn_bullet(
 }
 
 pub fn spawn_powerup(commands: &mut Commands, pos: Vec2) {
-    commands
+    let parent = commands
         .spawn((
-            Sprite::from_color(Color::srgb(1.0, 0.86, 0.32), Vec2::new(22.0, 22.0)),
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), POWERUP_P.size),
             Transform::from_translation(pos.extend(Z_POWERUP)),
             GameEntity,
             SpacePowerUp,
             Collider { size: Vec2::splat(22.0) },
         ))
-        .with_children(|p| {
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.88, 0.32, 0.32), Vec2::new(14.0, 14.0)),
-                Transform::from_xyz(0.0, 0.0, 0.01),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(1.0, 0.96, 0.78), Vec2::new(4.0, 10.0)),
-                Transform::from_xyz(0.0, 0.0, 0.02),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(1.0, 0.96, 0.78), Vec2::new(10.0, 4.0)),
-                Transform::from_xyz(0.0, 0.0, 0.02),
-            ));
-        });
+        .id();
+    spawn_def_children(commands, parent, &POWERUP_P);
 }
 
 pub fn spawn_explosion(commands: &mut Commands, pos: Vec2, big: bool) {

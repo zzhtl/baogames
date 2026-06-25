@@ -6,12 +6,14 @@ use crate::game::model::{Collider, GameKind, GameSession};
 use super::super::components::*;
 use super::super::constants::TANK_SIZE;
 use super::super::geometry::{aabb_overlap, play_max, play_min, snap_perpendicular};
+use super::super::resources::TankStage;
 use super::super::setup::spawn_bullet;
 
 pub fn tank_enemy_ai(
     mut commands: Commands,
     time: Res<Time>,
     session: Res<GameSession>,
+    stage: Res<TankStage>,
     mut enemies: Query<
         (
             Entity,
@@ -31,6 +33,10 @@ pub fn tank_enemy_ai(
     >,
 ) {
     if session.kind != GameKind::Tank || session.paused || session.finished {
+        return;
+    }
+    // 时钟道具：冻结期间敌人不转向、不开火
+    if stage.freeze_timer > 0.0 {
         return;
     }
     let delta = time.delta_secs();

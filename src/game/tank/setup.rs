@@ -3,16 +3,22 @@ use rand::prelude::*;
 use std::time::Duration;
 
 use crate::common::render::{UiFont, rect, text};
+use crate::common::sprite_def::SpriteDef;
 use crate::game::model::{Collider, GameEntity, Lifetime, Velocity};
 
 use super::components::*;
 use super::constants::*;
 use super::geometry::{subtile_center, tile_center};
 use super::resources::TankStage;
+use super::sprites::{
+    BASE_EAGLE, BRICK_SUBTILE, BUSH_TILE, ICE_TILE, PU_CLOCK, PU_GRENADE, PU_HELMET, PU_SHOVEL,
+    PU_STAR, PU_TANK, STEEL_TILE, TANK_ENEMY_ARMOR, TANK_ENEMY_BASIC, TANK_ENEMY_FAST,
+    TANK_ENEMY_POWER, TANK_P1, TANK_P2, WATER_TILE,
+};
 
 pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
     spawn_play_field(commands);
-    spawn_map(commands);
+    spawn_map(commands, level);
     spawn_hud(commands, font, level);
     spawn_mode_select_ui(commands, font);
 
@@ -29,6 +35,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
         kills: 0,
         two_player: false,
         mode_selected: false,
+        freeze_timer: 0.0,
     });
 }
 
@@ -136,8 +143,9 @@ fn spawn_play_field(commands: &mut Commands) {
     );
 }
 
-fn spawn_map(commands: &mut Commands) {
-    for (row, line) in STAGE_MAP.iter().enumerate() {
+fn spawn_map(commands: &mut Commands, level: u8) {
+    let map = &STAGE_MAPS[(level.max(1) as usize - 1) % STAGE_MAPS.len()];
+    for (row, line) in map.iter().enumerate() {
         for (col, ch) in line.chars().enumerate() {
             let row = row as i32;
             let col = col as i32;
@@ -223,102 +231,86 @@ fn spawn_brick_tile(commands: &mut Commands, col: i32, row: i32) {
     for dy in 0..2 {
         for dx in 0..2 {
             let pos = subtile_center(sx0 + dx, sy0 + dy);
-            commands.spawn((
-                Sprite::from_color(Color::srgb(0.78, 0.4, 0.16), Vec2::splat(SUBTILE - 0.5)),
-                Transform::from_translation(pos.extend(Z_TILE)),
-                BrickFC,
-                Collider {
-                    size: Vec2::splat(SUBTILE),
-                },
-                GameEntity,
-            ));
+            let parent = commands
+                .spawn((
+                    Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(SUBTILE)),
+                    Transform::from_translation(pos.extend(Z_TILE)),
+                    BrickFC,
+                    Collider {
+                        size: Vec2::splat(SUBTILE),
+                    },
+                    GameEntity,
+                ))
+                .id();
+            spawn_def_children(commands, parent, &BRICK_SUBTILE);
         }
     }
 }
 
 fn spawn_steel(commands: &mut Commands, col: i32, row: i32) {
     let pos = tile_center(col, row);
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.72, 0.78, 0.85), Vec2::splat(32.0)),
-        Transform::from_translation(pos.extend(Z_TILE)),
-        SteelFC,
-        Collider {
-            size: Vec2::splat(32.0),
-        },
-        GameEntity,
-    ));
-    // 高光
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.92, 0.96, 1.0), Vec2::new(28.0, 4.0)),
-        Transform::from_translation((pos + Vec2::new(0.0, 12.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.45, 0.5, 0.58), Vec2::new(28.0, 4.0)),
-        Transform::from_translation((pos + Vec2::new(0.0, -12.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(32.0)),
+            Transform::from_translation(pos.extend(Z_TILE)),
+            SteelFC,
+            Collider {
+                size: Vec2::splat(32.0),
+            },
+            GameEntity,
+        ))
+        .id();
+    spawn_def_children(commands, parent, &STEEL_TILE);
 }
 
 fn spawn_water(commands: &mut Commands, col: i32, row: i32) {
     let pos = tile_center(col, row);
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.18, 0.4, 0.8), Vec2::splat(32.0)),
-        Transform::from_translation(pos.extend(Z_TILE)),
-        WaterFC,
-        Collider {
-            size: Vec2::splat(32.0),
-        },
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.55, 0.78, 1.0), Vec2::new(20.0, 3.0)),
-        Transform::from_translation((pos + Vec2::new(-3.0, 6.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.55, 0.78, 1.0), Vec2::new(14.0, 3.0)),
-        Transform::from_translation((pos + Vec2::new(4.0, -6.0)).extend(Z_TILE + 0.05)),
-        GameEntity,
-    ));
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(32.0)),
+            Transform::from_translation(pos.extend(Z_TILE)),
+            WaterFC,
+            Collider {
+                size: Vec2::splat(32.0),
+            },
+            GameEntity,
+        ))
+        .id();
+    spawn_def_children(commands, parent, &WATER_TILE);
 }
 
 fn spawn_bush(commands: &mut Commands, col: i32, row: i32) {
     let pos = tile_center(col, row);
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.18, 0.62, 0.25), Vec2::splat(32.0)),
-        Transform::from_translation(pos.extend(Z_BUSH)),
-        BushFC,
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.34, 0.78, 0.36), Vec2::new(8.0, 8.0)),
-        Transform::from_translation((pos + Vec2::new(-8.0, 6.0)).extend(Z_BUSH + 0.05)),
-        GameEntity,
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.34, 0.78, 0.36), Vec2::new(8.0, 8.0)),
-        Transform::from_translation((pos + Vec2::new(8.0, -6.0)).extend(Z_BUSH + 0.05)),
-        GameEntity,
-    ));
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(32.0)),
+            Transform::from_translation(pos.extend(Z_BUSH)),
+            BushFC,
+            GameEntity,
+        ))
+        .id();
+    spawn_def_children(commands, parent, &BUSH_TILE);
 }
 
 fn spawn_ice(commands: &mut Commands, col: i32, row: i32) {
     let pos = tile_center(col, row);
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.78, 0.92, 1.0), Vec2::splat(32.0)),
-        Transform::from_translation(pos.extend(Z_TILE - 0.1)),
-        IceFC,
-        GameEntity,
-    ));
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(32.0)),
+            Transform::from_translation(pos.extend(Z_TILE - 0.1)),
+            IceFC,
+            GameEntity,
+        ))
+        .id();
+    spawn_def_children(commands, parent, &ICE_TILE);
 }
 
 fn spawn_base(commands: &mut Commands, col: i32, row: i32) {
     let pos = tile_center(col, row);
-    // 底座（鹰图标作为子实体，base 被 despawn 时会一起清理）
-    commands
+    // 底座 + 鹰徽（子块随 base despawn 一起清理）
+    let parent = commands
         .spawn((
-            Sprite::from_color(Color::srgb(0.18, 0.18, 0.22), Vec2::splat(28.0)),
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(28.0)),
             Transform::from_translation(pos.extend(Z_BASE)),
             BaseFC,
             Collider {
@@ -326,118 +318,101 @@ fn spawn_base(commands: &mut Commands, col: i32, row: i32) {
             },
             GameEntity,
         ))
-        .with_children(|p| {
-            // 鹰图标用三个色块拼
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.95, 0.85, 0.3), Vec2::new(18.0, 12.0)),
-                Transform::from_translation(Vec3::new(0.0, 2.0, 0.05)),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.95, 0.85, 0.3), Vec2::new(8.0, 6.0)),
-                Transform::from_translation(Vec3::new(0.0, -6.0, 0.05)),
-            ));
-            p.spawn((
-                Sprite::from_color(Color::srgb(0.2, 0.2, 0.2), Vec2::new(3.0, 3.0)),
-                Transform::from_translation(Vec3::new(4.0, 4.0, 0.1)),
-            ));
-        });
+        .id();
+    spawn_def_children(commands, parent, &BASE_EAGLE);
 }
 
 // ========== 坦克与特效 ==========
-pub fn spawn_player_tank(commands: &mut Commands, id: usize, pos: Vec2) {
-    let body_color = if id == 0 {
-        Color::srgb(0.85, 0.78, 0.36)
-    } else {
-        Color::srgb(0.46, 0.7, 0.95)
-    };
-    let mut entity = commands.spawn((
-        Sprite::from_color(body_color, Vec2::splat(TANK_SIZE)),
-        Transform::from_translation(pos.extend(Z_TANK)),
-        GameEntity,
-        TankFC {
-            side: TankSide::Player,
-            speed: PLAYER_SPEED,
-            fire_cd: PLAYER_FIRE_CD,
-            fire_cd_left: 0.0,
-            bullet_speed: PLAYER_BULLET_SPEED,
-            max_bullets: 1,
-            bullets_alive: 0,
-            hp: 1,
-            shield_left: SPAWN_SHIELD_TIME,
-        },
-        TankDir::Up,
-        PlayerTankFC { id },
-        Collider {
-            size: Vec2::splat(TANK_SIZE - 2.0),
-        },
-    ));
-    entity.with_children(|p| {
-        // 履带横纹
-        p.spawn((
-            Sprite::from_color(Color::srgb(0.25, 0.22, 0.12), Vec2::new(28.0, 5.0)),
-            Transform::from_translation(Vec3::new(0.0, 8.0, 0.05)),
-        ));
-        p.spawn((
-            Sprite::from_color(Color::srgb(0.25, 0.22, 0.12), Vec2::new(28.0, 5.0)),
-            Transform::from_translation(Vec3::new(0.0, -8.0, 0.05)),
-        ));
-        // 炮塔（圆心）
-        p.spawn((
-            Sprite::from_color(Color::srgb(0.5, 0.45, 0.18), Vec2::splat(12.0)),
-            Transform::from_translation(Vec3::new(0.0, 0.0, 0.06)),
-        ));
-        // 炮管（默认朝上）
-        p.spawn((
-            Sprite::from_color(Color::srgb(0.15, 0.13, 0.08), Vec2::new(4.0, 14.0)),
-            Transform::from_translation(Vec3::new(0.0, 12.0, 0.07)),
-        ));
-    });
+/// 按 SpriteDef 给坦克父实体挂子块（与离线预览同源）。子块 z 用 part 的 dz（相对父）。
+fn spawn_def_children(commands: &mut Commands, parent: Entity, def: &SpriteDef) {
+    for p in def.parts {
+        commands
+            .spawn((
+                Sprite::from_color(p.color, Vec2::new(p.w, p.h)),
+                Transform::from_translation(Vec3::new(p.dx, p.dy, p.dz)),
+                GameEntity,
+            ))
+            .insert(ChildOf(parent));
+    }
 }
 
-pub fn spawn_enemy_tank(commands: &mut Commands, pos: Vec2) {
-    let mut entity = commands.spawn((
-        Sprite::from_color(Color::srgb(0.78, 0.78, 0.78), Vec2::splat(TANK_SIZE)),
-        Transform {
-            translation: pos.extend(Z_TANK),
-            rotation: Quat::from_rotation_z(TankDir::Down.rotation()),
-            ..default()
-        },
-        GameEntity,
-        TankFC {
-            side: TankSide::Enemy,
-            speed: ENEMY_SPEED_BASE,
-            fire_cd: ENEMY_FIRE_CD,
-            fire_cd_left: rand::thread_rng().gen_range(0.4..1.2),
-            bullet_speed: ENEMY_BULLET_SPEED,
-            max_bullets: 1,
-            bullets_alive: 0,
-            hp: 1,
-            shield_left: 0.0,
-        },
-        TankDir::Down,
-        EnemyTankFC { turn_timer: 0.0 },
-        Collider {
-            size: Vec2::splat(TANK_SIZE - 2.0),
-        },
-    ));
-    entity.with_children(|p| {
-        p.spawn((
-            Sprite::from_color(Color::srgb(0.32, 0.32, 0.36), Vec2::new(28.0, 5.0)),
-            Transform::from_translation(Vec3::new(0.0, 8.0, 0.05)),
-        ));
-        p.spawn((
-            Sprite::from_color(Color::srgb(0.32, 0.32, 0.36), Vec2::new(28.0, 5.0)),
-            Transform::from_translation(Vec3::new(0.0, -8.0, 0.05)),
-        ));
-        p.spawn((
-            Sprite::from_color(Color::srgb(0.5, 0.5, 0.55), Vec2::splat(12.0)),
-            Transform::from_translation(Vec3::new(0.0, 0.0, 0.06)),
-        ));
-        p.spawn((
-            Sprite::from_color(Color::srgb(0.15, 0.15, 0.18), Vec2::new(4.0, 14.0)),
-            Transform::from_translation(Vec3::new(0.0, 12.0, 0.07)),
-        ));
-    });
+pub fn spawn_player_tank(commands: &mut Commands, id: usize, pos: Vec2) {
+    let def = if id == 0 { &TANK_P1 } else { &TANK_P2 };
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(TANK_SIZE)),
+            Transform::from_translation(pos.extend(Z_TANK)),
+            GameEntity,
+            TankFC {
+                side: TankSide::Player,
+                speed: PLAYER_SPEED,
+                fire_cd: PLAYER_FIRE_CD,
+                fire_cd_left: 0.0,
+                bullet_speed: PLAYER_BULLET_SPEED,
+                max_bullets: 1,
+                bullets_alive: 0,
+                hp: 1,
+                shield_left: SPAWN_SHIELD_TIME,
+            },
+            TankDir::Up,
+            PlayerTankFC { id },
+            Collider {
+                size: Vec2::splat(TANK_SIZE - 2.0),
+            },
+        ))
+        .id();
+    spawn_def_children(commands, parent, def);
+}
+
+pub fn spawn_enemy_tank(commands: &mut Commands, pos: Vec2, kind: EnemyTankKind) {
+    // 按兵种配精灵 + (速度, 子弹速度, 血量)
+    let (def, speed, bullet_speed, hp) = match kind {
+        EnemyTankKind::Basic => (&TANK_ENEMY_BASIC, ENEMY_SPEED_BASE, ENEMY_BULLET_SPEED, 1),
+        EnemyTankKind::Fast => (&TANK_ENEMY_FAST, ENEMY_SPEED_BASE * 1.8, ENEMY_BULLET_SPEED, 1),
+        EnemyTankKind::Power => (
+            &TANK_ENEMY_POWER,
+            ENEMY_SPEED_BASE,
+            ENEMY_BULLET_SPEED * 1.6,
+            1,
+        ),
+        EnemyTankKind::Armor => (
+            &TANK_ENEMY_ARMOR,
+            ENEMY_SPEED_BASE * 0.85,
+            ENEMY_BULLET_SPEED,
+            3,
+        ),
+    };
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(TANK_SIZE)),
+            Transform {
+                translation: pos.extend(Z_TANK),
+                rotation: Quat::from_rotation_z(TankDir::Down.rotation()),
+                ..default()
+            },
+            GameEntity,
+            TankFC {
+                side: TankSide::Enemy,
+                speed,
+                fire_cd: ENEMY_FIRE_CD,
+                fire_cd_left: rand::thread_rng().gen_range(0.4..1.2),
+                bullet_speed,
+                max_bullets: 1,
+                bullets_alive: 0,
+                hp,
+                shield_left: 0.0,
+            },
+            TankDir::Down,
+            EnemyTankFC {
+                turn_timer: 0.0,
+                kind,
+            },
+            Collider {
+                size: Vec2::splat(TANK_SIZE - 2.0),
+            },
+        ))
+        .id();
+    spawn_def_children(commands, parent, def);
 }
 
 pub fn spawn_spawn_effect(
@@ -445,6 +420,7 @@ pub fn spawn_spawn_effect(
     pos: Vec2,
     side: TankSide,
     player_id: Option<usize>,
+    enemy_kind: Option<EnemyTankKind>,
 ) {
     commands.spawn((
         Sprite::from_color(Color::srgb(0.9, 0.95, 1.0), Vec2::splat(TANK_SIZE)),
@@ -454,6 +430,7 @@ pub fn spawn_spawn_effect(
             spawn_pos: pos,
             side,
             player_id,
+            enemy_kind,
         },
         GameEntity,
     ));
@@ -508,4 +485,40 @@ pub fn spawn_muzzle_flash(commands: &mut Commands, pos: Vec2, dir: TankDir) {
         Lifetime(Timer::new(Duration::from_millis(80), TimerMode::Once)),
         GameEntity,
     ));
+}
+
+pub fn spawn_powerup(commands: &mut Commands, pos: Vec2, kind: PowerUpKind) {
+    let def = match kind {
+        PowerUpKind::Star => &PU_STAR,
+        PowerUpKind::Grenade => &PU_GRENADE,
+        PowerUpKind::Helmet => &PU_HELMET,
+        PowerUpKind::Tank => &PU_TANK,
+        PowerUpKind::Clock => &PU_CLOCK,
+        PowerUpKind::Shovel => &PU_SHOVEL,
+    };
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(POWERUP_SIZE)),
+            Transform::from_translation(pos.extend(Z_BUSH + 0.5)),
+            PowerUp { kind },
+            GameEntity,
+        ))
+        .id();
+    spawn_def_children(commands, parent, def);
+}
+
+/// 在世界坐标处生成一块钢墙（铲子道具给基地筑墙用）。
+pub fn spawn_steel_at(commands: &mut Commands, pos: Vec2) {
+    let parent = commands
+        .spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(32.0)),
+            Transform::from_translation(pos.extend(Z_TILE)),
+            SteelFC,
+            Collider {
+                size: Vec2::splat(32.0),
+            },
+            GameEntity,
+        ))
+        .id();
+    spawn_def_children(commands, parent, &STEEL_TILE);
 }

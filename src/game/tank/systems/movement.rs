@@ -6,10 +6,12 @@ use crate::game::model::{Collider, GameKind, GameSession};
 use super::super::components::*;
 use super::super::constants::TANK_SIZE;
 use super::super::geometry::{aabb_overlap, play_max, play_min};
+use super::super::resources::TankStage;
 
 pub fn tank_movement(
     time: Res<Time>,
     session: Res<GameSession>,
+    stage: Res<TankStage>,
     keys: Res<ButtonInput<KeyCode>>,
     mut tanks: Query<(
         Entity,
@@ -45,7 +47,8 @@ pub fn tank_movement(
         let advance = if let Some(p) = player {
             input_for(&keys, p.id).move_dir.length_squared() > 0.05
         } else {
-            true
+            // 敌人：被时钟冻结时停止移动
+            stage.freeze_timer <= 0.0
         };
         if !advance {
             continue;

@@ -139,48 +139,50 @@ fn paint_frame(commands: &mut Commands) {
 }
 
 fn paint_cannon(commands: &mut Commands) {
-    // 圆滚滚的炮台底座
-    rect(
-        commands,
-        Vec2::new(CANNON_X, CANNON_Y - 20.0),
-        Vec2::new(72.0, 22.0),
-        Color::srgb(0.6, 0.4, 0.8),
-        GameEntity,
-    );
-    rect(
-        commands,
-        Vec2::new(CANNON_X, CANNON_Y - 20.0),
-        Vec2::new(64.0, 14.0),
-        Color::srgb(0.92, 0.78, 1.0),
-        GameEntity,
-    );
-    // 两个圆轮子
-    rect(
-        commands,
-        Vec2::new(CANNON_X - 32.0, CANNON_Y - 10.0),
-        Vec2::new(10.0, 14.0),
-        Color::srgb(0.5, 0.32, 0.66),
-        GameEntity,
-    );
-    rect(
-        commands,
-        Vec2::new(CANNON_X + 32.0, CANNON_Y - 10.0),
-        Vec2::new(10.0, 14.0),
-        Color::srgb(0.5, 0.32, 0.66),
-        GameEntity,
-    );
+    let put = |commands: &mut Commands, x: f32, y: f32, w: f32, h: f32, c: Color| {
+        rect(commands, Vec2::new(x, y), Vec2::new(w, h), c, GameEntity);
+    };
+    // 底座圆台：暗边 + 主体 + 顶高光
+    put(commands, CANNON_X, CANNON_Y - 22.0, 80.0, 18.0, Color::srgb(0.40, 0.25, 0.56));
+    put(commands, CANNON_X, CANNON_Y - 21.0, 72.0, 13.0, Color::srgb(0.62, 0.42, 0.82));
+    put(commands, CANNON_X, CANNON_Y - 18.0, 64.0, 4.0, Color::srgb(0.88, 0.74, 1.0));
+    // 两侧轮子（带轴心高光）
+    for sx in [-1.0_f32, 1.0] {
+        put(commands, CANNON_X + sx * 34.0, CANNON_Y - 12.0, 12.0, 16.0, Color::srgb(0.46, 0.30, 0.62));
+        put(commands, CANNON_X + sx * 34.0, CANNON_Y - 12.0, 5.0, 5.0, Color::srgb(0.86, 0.72, 1.0));
+    }
+    // 转盘（炮管枢轴）
+    put(commands, CANNON_X, CANNON_Y - 2.0, 34.0, 30.0, Color::srgb(0.50, 0.32, 0.68));
+    put(commands, CANNON_X, CANNON_Y - 2.0, 26.0, 24.0, Color::srgb(0.70, 0.52, 0.92));
+    put(commands, CANNON_X - 5.0, CANNON_Y + 2.0, 8.0, 8.0, Color::srgb(0.90, 0.80, 1.0));
 
-    // 炮管 (旋转的)
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.78, 0.58, 0.94), Vec2::new(16.0, 46.0)),
-        Transform {
-            translation: Vec3::new(CANNON_X, CANNON_Y + 22.0, Z_CANNON),
-            rotation: Quat::IDENTITY,
-            ..default()
-        },
-        CannonBarrel,
-        GameEntity,
-    ));
+    // 炮管 (旋转的)：枪管 + 高光 + 口环
+    let barrel = commands
+        .spawn((
+            Sprite::from_color(Color::srgb(0.70, 0.50, 0.90), Vec2::new(16.0, 46.0)),
+            Transform {
+                translation: Vec3::new(CANNON_X, CANNON_Y + 22.0, Z_CANNON),
+                rotation: Quat::IDENTITY,
+                ..default()
+            },
+            CannonBarrel,
+            GameEntity,
+        ))
+        .id();
+    commands
+        .spawn((
+            Sprite::from_color(Color::srgb(0.88, 0.76, 1.0), Vec2::new(4.0, 42.0)),
+            Transform::from_xyz(-4.0, 0.0, 0.02),
+            GameEntity,
+        ))
+        .insert(ChildOf(barrel));
+    commands
+        .spawn((
+            Sprite::from_color(Color::srgb(0.52, 0.34, 0.70), Vec2::new(18.0, 6.0)),
+            Transform::from_xyz(0.0, 22.0, 0.02),
+            GameEntity,
+        ))
+        .insert(ChildOf(barrel));
 }
 
 pub fn spawn_loaded_bubble(

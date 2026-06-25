@@ -2,6 +2,7 @@
 name = "baogames"
 version = "0.1.0"
 edition = "2024"
+default-run = "baogames"
 
 [dependencies]
 bevy = "0.18"
@@ -9,6 +10,17 @@ noise = "0.9"
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
+# 仅离线预览工具(src/bin/preview)使用；只开 png/jpeg 解码以控编译开销
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+
+# 注：src/bin/preview/main.rs 由 Cargo 自动发现为 `preview` 二进制，无需显式 [[bin]]。
 
 [profile.dev.package."*"]
 opt-level = 1
+
+# 发布构建：体积/性能优化，供 macOS 打包脚本使用
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

@@ -56,6 +56,10 @@ pub const COLOR_PLAYER_BODY: Color = Color::srgb(0.32, 0.72, 0.20);
 pub const COLOR_PLAYER_BODY_DK: Color = Color::srgb(0.10, 0.38, 0.10);
 pub const COLOR_PLAYER_PANTS: Color = Color::srgb(0.14, 0.22, 0.62);
 pub const COLOR_PLAYER_PANTS_DK: Color = Color::srgb(0.06, 0.10, 0.34);
+pub const COLOR_PLAYER_PANTS_HI: Color = Color::srgb(0.32, 0.46, 0.92);
+// 裸上身肌肉多阶明暗：高光 / 基础(SKIN) / 阴影(SKIN_DK) / 深阴影
+pub const COLOR_PLAYER_SKIN_HI: Color = Color::srgb(1.0, 0.88, 0.70);
+pub const COLOR_PLAYER_SKIN_SH: Color = Color::srgb(0.58, 0.36, 0.20);
 pub const COLOR_PLAYER_BOOT: Color = Color::srgb(0.30, 0.14, 0.04);
 pub const COLOR_PLAYER_GUN: Color = Color::srgb(0.20, 0.20, 0.24);
 pub const COLOR_PLAYER_GUN_HI: Color = Color::srgb(0.62, 0.62, 0.68);
@@ -71,6 +75,22 @@ pub const COLOR_ENEMY_BLUE: Color = Color::srgb(0.22, 0.38, 0.96);
 pub const COLOR_ENEMY_SKIN: Color = Color::srgb(0.98, 0.78, 0.56);
 pub const COLOR_ENEMY_PANTS: Color = Color::srgb(0.66, 0.52, 0.16);
 pub const COLOR_ENEMY_PANTS_DK: Color = Color::srgb(0.32, 0.22, 0.06);
+// 狙手 / 跳兵的躯干暗面（原先内联在 setup_actors.rs，抽成具名常量供 sprites.rs 共享）
+pub const COLOR_ENEMY_RED_DK: Color = Color::srgb(0.40, 0.06, 0.06);
+pub const COLOR_ENEMY_BLUE_DK: Color = Color::srgb(0.10, 0.18, 0.60);
+// 装甲兵（灰）/ 机枪手（迷彩绿）的躯干配色
+pub const COLOR_ENEMY_GRAY: Color = Color::srgb(0.50, 0.52, 0.58);
+pub const COLOR_ENEMY_GRAY_DK: Color = Color::srgb(0.26, 0.28, 0.34);
+pub const COLOR_ENEMY_GREEN: Color = Color::srgb(0.34, 0.54, 0.22);
+pub const COLOR_ENEMY_GREEN_DK: Color = Color::srgb(0.16, 0.30, 0.10);
+// 敌兵 4 阶明暗的受光高光色（制服 + 帽 + 裤）
+pub const COLOR_ENEMY_HAT_HI: Color = Color::srgb(1.0, 0.86, 0.46);
+pub const COLOR_ENEMY_PANTS_HI: Color = Color::srgb(0.82, 0.68, 0.28);
+pub const COLOR_ENEMY_BODY_HI: Color = Color::srgb(0.98, 0.44, 0.34);
+pub const COLOR_ENEMY_RED_HI: Color = Color::srgb(0.92, 0.30, 0.24);
+pub const COLOR_ENEMY_BLUE_HI: Color = Color::srgb(0.44, 0.58, 1.0);
+pub const COLOR_ENEMY_GRAY_HI: Color = Color::srgb(0.70, 0.72, 0.80);
+pub const COLOR_ENEMY_GREEN_HI: Color = Color::srgb(0.54, 0.74, 0.34);
 pub const COLOR_ENEMY_GUN: Color = Color::srgb(0.10, 0.10, 0.12);
 pub const COLOR_ENEMY_OUTLINE: Color = Color::srgb(0.04, 0.04, 0.06);
 
@@ -81,11 +101,14 @@ pub const COLOR_FLAME_CORE: Color = Color::srgb(1.0, 0.84, 0.30);
 pub const COLOR_FALCON: Color = Color::srgb(0.88, 0.88, 0.96);
 pub const COLOR_FALCON_DARK: Color = Color::srgb(0.32, 0.32, 0.38);
 pub const COLOR_FALCON_BEAK: Color = Color::srgb(1.0, 0.78, 0.18);
+pub const COLOR_FALCON_HI: Color = Color::srgb(1.0, 1.0, 1.0);
 pub const COLOR_PICKUP_BG: Color = Color::srgb(0.06, 0.06, 0.08);
 pub const COLOR_PICKUP_M: Color = Color::srgb(0.42, 0.92, 0.32);
 pub const COLOR_PICKUP_S: Color = Color::srgb(1.00, 0.78, 0.18);
 pub const COLOR_PICKUP_F: Color = Color::srgb(1.00, 0.42, 0.16);
 pub const COLOR_PICKUP_R: Color = Color::srgb(0.46, 0.78, 1.00);
+pub const COLOR_PICKUP_L: Color = Color::srgb(0.62, 0.96, 1.00);
+pub const COLOR_LASER: Color = Color::srgb(0.74, 0.98, 1.00);
 
 pub const COLOR_BOSS_WALL: Color = Color::srgb(0.42, 0.46, 0.52);
 pub const COLOR_BOSS_WALL_DARK: Color = Color::srgb(0.22, 0.24, 0.30);
@@ -94,6 +117,11 @@ pub const COLOR_TURRET: Color = Color::srgb(0.30, 0.30, 0.36);
 pub const COLOR_TURRET_BARREL: Color = Color::srgb(0.20, 0.20, 0.24);
 pub const COLOR_BOSS_CORE: Color = Color::srgb(0.96, 0.40, 0.22);
 pub const COLOR_BOSS_CORE_HI: Color = Color::srgb(1.0, 0.78, 0.42);
+pub const COLOR_BOSS_WALL_HI: Color = Color::srgb(0.58, 0.62, 0.70);
+pub const COLOR_BOSS_PANEL: Color = Color::srgb(0.26, 0.28, 0.34);
+pub const COLOR_BOSS_RIVET: Color = Color::srgb(0.66, 0.70, 0.78);
+pub const COLOR_BOSS_WARN: Color = Color::srgb(0.92, 0.78, 0.20);
+pub const COLOR_BOSS_CORE_WHITE: Color = Color::srgb(1.0, 0.96, 0.86);
 pub const COLOR_EXPL_HOT: Color = Color::srgb(1.0, 0.92, 0.36);
 pub const COLOR_EXPL_MID: Color = Color::srgb(1.0, 0.55, 0.18);
 pub const COLOR_EXPL_OUT: Color = Color::srgb(0.78, 0.18, 0.10);

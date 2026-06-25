@@ -109,9 +109,24 @@ impl Default for SaveData {
     }
 }
 
+/// 存档文件的绝对路径。
+///
+/// macOS 下放到 `~/Library/Application Support/BaoGames/`：从 Finder 启动 `.app` 时
+/// 工作目录是 `/`，用相对路径写入会静默失败、存档丢失。其它平台保持运行目录下的
+/// 相对路径，开发期 `cargo run` 行为不变。
+fn save_path() -> std::path::PathBuf {
+    #[cfg(target_os = "macos")]
+    if let Some(home) = std::env::var_os("HOME") {
+        let dir = std::path::Path::new(&home).join("Library/Application Support/BaoGames");
+        let _ = fs::create_dir_all(&dir);
+        return dir.join(SAVE_FILE);
+    }
+    std::path::PathBuf::from(SAVE_FILE)
+}
+
 impl SaveData {
     pub(super) fn load() -> Self {
-        match fs::read(SAVE_FILE) {
+        match fs::read(save_path()) {
             Ok(bytes) => bincode::deserialize(&bytes).unwrap_or_default(),
             Err(_) => Self::default(),
         }
@@ -119,7 +134,7 @@ impl SaveData {
 
     pub(super) fn store(&self) {
         if let Ok(bytes) = bincode::serialize(self) {
-            let _ = fs::write(SAVE_FILE, bytes);
+            let _ = fs::write(save_path(), bytes);
         }
     }
 }

@@ -2,3 +2,7 @@
 target
 .claude*
 .vscode
+# 离线预览工具产物（人工目检用，不入库）
+preview_out
+# macOS 打包产物
+dist
