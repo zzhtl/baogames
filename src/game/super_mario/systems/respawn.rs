@@ -54,7 +54,7 @@ fn apply_game_over(session: &mut GameSession, save: &mut SaveData) -> bool {
     }
     session.finished = true;
     session.won = false;
-    session.status = "GAME OVER  Enter 重玩 / Backspace 返回菜单".to_string();
+    session.status = format!("生命耗尽 · 得分 {}", session.score);
     let idx = session.kind.index();
     let mut dirty = false;
     if session.score > save.high_scores[idx] {

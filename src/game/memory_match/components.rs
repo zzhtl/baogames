@@ -15,21 +15,17 @@ pub struct MemoryCard {
     pub state: CardState,
 }
 
-/// 卡背（紫色面板 + 问号）相关子实体。
+/// 卡背组节点（紫色面板 + 问号），FaceDown 时可见。
 #[derive(Component)]
 pub struct CardBack;
 
-/// 卡面（奶油色或金色面板 + 字符）相关子实体。
+/// 卡面组节点（米白面板 + 字符），FaceUp 时可见。
 #[derive(Component)]
 pub struct CardFace;
 
-/// 卡面边框：颜色随 state 切换。
+/// 已配对卡面组节点（金色面板 + 字符），Matched 时可见。
 #[derive(Component)]
-pub struct CardFaceBorder;
-
-/// 卡面内层填充：颜色随 state 切换。
-#[derive(Component)]
-pub struct CardFaceInner;
+pub struct CardFaceMatched;
 
 /// 4 条边组成的选中框，offset 是相对于当前光标所在卡中心的偏移。
 #[derive(Component)]

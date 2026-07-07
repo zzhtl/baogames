@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
@@ -17,6 +18,7 @@ pub fn contra_pickup_update(
     >,
     solid_q: Query<(&Transform, &ContraSolid), Without<ContraPickup>>,
     mut player_q: Query<(&mut ContraPlayer, &Transform), Without<ContraPickup>>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
@@ -56,6 +58,7 @@ pub fn contra_pickup_update(
                 let ps = player_size(player.prone);
                 if aabb_overlap(pp, ps, tr.translation.truncate(), Vec2::splat(PICKUP_SIZE)) {
                     player.weapon = p.weapon;
+                    sfx.write(PlaySfx(SfxKind::Powerup));
                     commands.entity(e).despawn();
                     session.score += 300;
                 }

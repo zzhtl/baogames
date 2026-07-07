@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
@@ -111,7 +112,11 @@ pub fn mario_player_vs_powerup(
     mut session: ResMut<GameSession>,
     mut player_q: Query<(Entity, &mut MarioPlayer, &Transform), Without<PowerUp>>,
     powerup_q: Query<(Entity, &PowerUp, &Transform), Without<MarioPlayer>>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
+    if session.paused || session.finished {
+        return;
+    }
     let Ok((player_e, mut player, ptr)) = player_q.single_mut() else {
         return;
     };
@@ -152,6 +157,7 @@ pub fn mario_player_vs_powerup(
                 session.score = session.score.saturating_add(1000);
             }
         }
+        sfx.write(PlaySfx(SfxKind::Powerup));
         commands.entity(e).despawn();
     }
 }

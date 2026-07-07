@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{Collider, GameKind, GameSession, SaveData};
 
 use super::super::components::*;
@@ -17,6 +18,7 @@ pub fn bm_exit_and_respawn(
     exits: Query<(&Transform, &Collider), With<BMExit>>,
     players: Query<(&Transform, &Collider), With<BMPlayer>>,
     all_players: Query<&BMPlayer>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::BombMaze {
         return;
@@ -42,6 +44,7 @@ pub fn bm_exit_and_respawn(
             let pp = pt.translation.truncate();
             for (ep, es) in &exit_data {
                 if aabb_overlap(pp, pc.size, *ep, *es) {
+                    sfx.write(PlaySfx(SfxKind::MenuConfirm));
                     if finish_bomb_maze(&mut session, &mut save, &stage, true) {
                         save.store();
                     }
@@ -106,10 +109,10 @@ fn finish_bomb_maze(
         let idx = session.kind.index();
         save.high_scores[idx] = save.high_scores[idx].max(session.score);
         save.unlocked_levels[idx] = save.unlocked_levels[idx].max((stage.level + 1).min(10));
-        session.status = "成功逃出迷宫！Enter 重玩，Esc 返回".to_string();
+        session.status = format!("成功逃出迷宫 · 得分 {}", session.score);
         true
     } else {
-        session.status = "迷宫之旅失败……Enter 重试，Esc 返回".to_string();
+        session.status = format!("迷宫之旅失败 · 得分 {}", session.score);
         false
     }
 }

@@ -158,7 +158,6 @@ pub struct ContraBoss {
 #[derive(Component, Clone, Copy)]
 pub struct ContraHud {
     pub kind: ContraHudKind,
-    pub offset: Vec2,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -169,7 +168,6 @@ pub enum ContraHudKind {
     Weapon,
     WeaponLetter,
     World,
-    Status,
     BossHp,
 }
 
@@ -177,11 +175,6 @@ pub enum ContraHudKind {
 #[derive(Component)]
 pub struct ContraHudLifeIcon {
     pub idx: i32,
-}
-
-#[derive(Component)]
-pub struct ContraHudPanel {
-    pub offset: Vec2,
 }
 
 #[cfg(test)]

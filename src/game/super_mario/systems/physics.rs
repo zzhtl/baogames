@@ -1,22 +1,22 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
 use super::super::constants::*;
 use super::super::geometry::{aabb_overlap, level_world_max_x};
+use super::super::setup_actors::spawn_brick_shards;
 
 pub fn mario_physics(
     time: Res<Time>,
-    session: Res<GameSession>,
+    mut commands: Commands,
+    mut session: ResMut<GameSession>,
     mut player_q: Query<(&mut MarioPlayer, &mut Transform), Without<Solid>>,
     solid_q: Query<(Entity, &Transform, &Solid), Without<MarioPlayer>>,
     brick_q: Query<&BrickTile>,
     mut question_q: Query<&mut QuestionBlock>,
-    pipe_q: Query<&PipeTile>,
-    stone_q: Query<&StoneTile>,
-    ground_q: Query<&GroundTile>,
-    flag_q: Query<&FlagPole>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
@@ -114,7 +114,7 @@ pub fn mario_physics(
 
     pos.y += player.vel.y * dt;
     let mut on_ground = false;
-    let mut hit_above: Option<Entity> = None;
+    let mut hit_above: Option<(Entity, Vec2)> = None;
     for (e, st, s) in &solid_q {
         let sp = st.translation.truncate();
         if aabb_overlap(pos, p_size, sp, s.size) {
@@ -132,14 +132,14 @@ pub fn mario_physics(
                     if player.vel.y > 0.0 {
                         player.vel.y = 0.0;
                     }
-                    hit_above = Some(e);
+                    hit_above = Some((e, sp));
                 }
             }
         }
     }
     player.on_ground = on_ground;
 
-    if let Some(e) = hit_above {
+    if let Some((e, block_pos)) = hit_above {
         if let Ok(mut q) = question_q.get_mut(e) {
             if !q.used {
                 q.used = true;
@@ -147,9 +147,13 @@ pub fn mario_physics(
             } else if q.bump_t <= 0.0 {
                 q.bump_t = 0.10;
             }
-        } else if brick_q.get(e).is_ok() {
-        } else if pipe_q.get(e).is_ok() || stone_q.get(e).is_ok() || ground_q.get(e).is_ok() {
-        } else if flag_q.get(e).is_ok() {
+        } else if brick_q.get(e).is_ok() && !matches!(player.state, PowerState::Small) {
+            // 大/火力马里奥顶碎砖块
+            commands.entity(e).despawn();
+            spawn_brick_shards(&mut commands, block_pos);
+            sfx.write(PlaySfx(SfxKind::Hit));
+            session.score = session.score.saturating_add(50);
+            player.vel.y = -120.0;
         }
     }
 
@@ -159,6 +163,7 @@ pub fn mario_physics(
     if pos.y < FALL_DEATH_Y && player.dead_timer <= 0.0 {
         player.dead_timer = 2.0;
         player.vel = Vec2::new(0.0, 380.0);
+        session.lives -= 1;
     }
 
     if player.invincible > 0.0 {

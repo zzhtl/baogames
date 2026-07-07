@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
 use crate::common::constants::{ARENA_H, ARENA_W};
-use crate::common::render::{UiFont, text};
+use crate::common::render::UiFont;
+use crate::game::hud::hud_text;
 use crate::game::model::GameEntity;
 
 use super::components::*;
@@ -13,7 +14,13 @@ use super::setup_terrain::{
     spawn_background, spawn_bridge, spawn_decor, spawn_ground_run, spawn_platform, spawn_water,
 };
 
-pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8, top_score: u32) {
+pub fn setup_stage(
+    commands: &mut Commands,
+    font: &UiFont,
+    hud_root: Entity,
+    level: u8,
+    top_score: u32,
+) {
     spawn_background(commands, stage_sky(level));
     spawn_decor(commands);
 
@@ -42,7 +49,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8, top_score:
     let falcon_marks = build_falcon_marks();
     let spawn_marks = build_enemy_marks(level);
 
-    spawn_hud(commands, font, level, top_score);
+    spawn_hud(commands, font, hud_root, level, top_score);
 
     let stage = ContraStage {
         level,
@@ -200,163 +207,109 @@ fn build_enemy_marks_l1() -> Vec<EnemySpawnMark> {
     ]
 }
 
-fn spawn_hud(commands: &mut Commands, font: &UiFont, level: u8, top_score: u32) {
-    let hud_z = 9.0_f32;
+fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8, top_score: u32) {
     let top_y = ARENA_H * 0.5 - 14.0;
-    let bar_off = Vec2::new(0.0, top_y);
-    let bar_size = Vec2::new(ARENA_W, 28.0);
-    commands
-        .spawn((
-            Sprite::from_color(Color::srgb(0.0, 0.0, 0.0), bar_size),
-            Transform::from_translation(bar_off.extend(hud_z)),
-            GameEntity,
-        ))
-        .insert(ContraHudPanel { offset: bar_off });
-    let line_off = Vec2::new(0.0, top_y - 14.0);
-    commands
-        .spawn((
-            Sprite::from_color(Color::srgb(0.85, 0.85, 0.85), Vec2::new(ARENA_W, 1.0)),
-            Transform::from_translation(line_off.extend(hud_z + 0.05)),
-            GameEntity,
-        ))
-        .insert(ContraHudPanel { offset: line_off });
-
-    let top_off = Vec2::new(-ARENA_W * 0.5 + 96.0, top_y);
-    text(
-        commands,
-        font,
-        &format!("TOP-{:06}", top_score),
-        top_off,
-        14.0,
-        Color::srgb(1.0, 1.0, 1.0),
+    // 顶部黑色通栏 + 分隔线
+    commands.spawn((
+        Sprite::from_color(Color::srgb(0.0, 0.0, 0.0), Vec2::new(ARENA_W, 28.0)),
+        Transform::from_translation(Vec3::new(0.0, top_y, 0.0)),
         GameEntity,
-    )
-    .insert(ContraHud {
-        kind: ContraHudKind::TopScore,
-        offset: top_off,
-    });
-
-    let score_off = Vec2::new(-ARENA_W * 0.5 + 232.0, top_y);
-    text(
-        commands,
-        font,
-        "1P-000000",
-        score_off,
-        14.0,
-        Color::srgb(1.0, 0.95, 0.30),
+        ChildOf(hud_root),
+    ));
+    commands.spawn((
+        Sprite::from_color(Color::srgb(0.85, 0.85, 0.85), Vec2::new(ARENA_W, 1.0)),
+        Transform::from_translation(Vec3::new(0.0, top_y - 14.0, 0.05)),
         GameEntity,
-    )
-    .insert(ContraHud {
-        kind: ContraHudKind::Score,
-        offset: score_off,
-    });
+        ChildOf(hud_root),
+    ));
 
-    let world_off = Vec2::new(0.0, top_y);
-    text(
-        commands,
-        font,
-        &format!("STAGE 1-{}", level),
-        world_off,
-        14.0,
-        Color::srgb(1.0, 1.0, 1.0),
-        GameEntity,
-    )
-    .insert(ContraHud {
-        kind: ContraHudKind::World,
-        offset: world_off,
-    });
+    // 文本项：纪录 / 分数 / 关卡 / 命数 / BOSS 血量
+    let texts: [(&str, Vec2, f32, Color, ContraHudKind); 5] = [
+        (
+            "TOP-000000",
+            Vec2::new(-ARENA_W * 0.5 + 96.0, top_y),
+            14.0,
+            Color::srgb(1.0, 1.0, 1.0),
+            ContraHudKind::TopScore,
+        ),
+        (
+            "1P-000000",
+            Vec2::new(-ARENA_W * 0.5 + 232.0, top_y),
+            14.0,
+            Color::srgb(1.0, 0.95, 0.30),
+            ContraHudKind::Score,
+        ),
+        (
+            "STAGE 1-1",
+            Vec2::new(0.0, top_y),
+            14.0,
+            Color::srgb(1.0, 1.0, 1.0),
+            ContraHudKind::World,
+        ),
+        (
+            "x3",
+            Vec2::new(110.0, top_y),
+            14.0,
+            Color::srgb(1.0, 1.0, 1.0),
+            ContraHudKind::Lives,
+        ),
+        (
+            "",
+            Vec2::new(ARENA_W * 0.5 - 30.0, top_y),
+            12.0,
+            Color::srgb(1.0, 0.4, 0.32),
+            ContraHudKind::BossHp,
+        ),
+    ];
+    for (value, pos, size, color, kind) in texts {
+        hud_text(commands, font, hud_root, value, pos, size, color, ContraHud { kind });
+    }
+    let _ = (level, top_score);
 
-    let lives_label_off = Vec2::new(110.0, top_y);
-    text(
-        commands,
-        font,
-        "x3",
-        lives_label_off,
-        14.0,
-        Color::srgb(1.0, 1.0, 1.0),
-        GameEntity,
-    )
-    .insert(ContraHud {
-        kind: ContraHudKind::Lives,
-        offset: lives_label_off,
-    });
     for i in 0..4 {
         let icon_off = Vec2::new(140.0 + i as f32 * 14.0, top_y);
-        spawn_life_icon(commands, icon_off, hud_z + 0.2, i);
+        spawn_life_icon(commands, hud_root, icon_off, 0.2, i);
     }
 
+    // 当前武器指示：白色底框 + 武器色块 + 字母
     let weapon_off = Vec2::new(ARENA_W * 0.5 - 80.0, top_y);
-    commands
-        .spawn((
-            Sprite::from_color(Color::srgb(1.0, 1.0, 1.0), Vec2::new(20.0, 20.0)),
-            Transform::from_translation(weapon_off.extend(hud_z + 0.1)),
-            GameEntity,
-        ))
-        .insert(ContraHudPanel { offset: weapon_off });
-    commands
-        .spawn((
-            Sprite::from_color(COLOR_PICKUP_M, Vec2::new(16.0, 16.0)),
-            Transform::from_translation(weapon_off.extend(hud_z + 0.15)),
-            GameEntity,
-        ))
-        .insert(ContraHud {
+    commands.spawn((
+        Sprite::from_color(Color::srgb(1.0, 1.0, 1.0), Vec2::new(20.0, 20.0)),
+        Transform::from_translation(weapon_off.extend(0.1)),
+        GameEntity,
+        ChildOf(hud_root),
+    ));
+    commands.spawn((
+        Sprite::from_color(COLOR_PICKUP_M, Vec2::new(16.0, 16.0)),
+        Transform::from_translation(weapon_off.extend(0.15)),
+        GameEntity,
+        ChildOf(hud_root),
+        ContraHud {
             kind: ContraHudKind::Weapon,
-            offset: weapon_off,
-        });
-    let weapon_letter_off = Vec2::new(ARENA_W * 0.5 - 80.0, top_y);
-    text(
+        },
+    ));
+    hud_text(
         commands,
         font,
+        hud_root,
         "M",
-        weapon_letter_off,
+        weapon_off,
         14.0,
         Color::srgb(0.0, 0.0, 0.0),
-        GameEntity,
-    )
-    .insert(ContraHud {
-        kind: ContraHudKind::WeaponLetter,
-        offset: weapon_letter_off,
-    });
-
-    let status_off = Vec2::new(0.0, 0.0);
-    text(
-        commands,
-        font,
-        "",
-        status_off,
-        22.0,
-        Color::srgb(1.0, 0.95, 0.30),
-        GameEntity,
-    )
-    .insert(ContraHud {
-        kind: ContraHudKind::Status,
-        offset: status_off,
-    });
-
-    let boss_off = Vec2::new(ARENA_W * 0.5 - 30.0, top_y);
-    text(
-        commands,
-        font,
-        "",
-        boss_off,
-        12.0,
-        Color::srgb(1.0, 0.4, 0.32),
-        GameEntity,
-    )
-    .insert(ContraHud {
-        kind: ContraHudKind::BossHp,
-        offset: boss_off,
-    });
+        ContraHud {
+            kind: ContraHudKind::WeaponLetter,
+        },
+    );
 }
 
-fn spawn_life_icon(commands: &mut Commands, offset: Vec2, z: f32, idx: i32) {
+fn spawn_life_icon(commands: &mut Commands, hud_root: Entity, offset: Vec2, z: f32, idx: i32) {
     let parent = commands
         .spawn((
             Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::new(12.0, 12.0)),
             Transform::from_translation(offset.extend(z)),
             ContraHudLifeIcon { idx },
-            ContraHudPanel { offset },
             GameEntity,
+            ChildOf(hud_root),
         ))
         .id();
     // 小 Bill 头像：棕发 + 裸肩，与新版立绘一致

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{Collider, GameKind, GameSession};
 
 use super::super::components::{SpacePowerUp, SpaceShipPlayer};
@@ -16,6 +17,7 @@ pub fn space_powerup_drop_and_pickup(
         (With<SpacePowerUp>, Without<SpaceShipPlayer>),
     >,
     players: Query<(&Transform, &Collider), With<SpaceShipPlayer>>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::SpaceShooter || session.paused || session.finished {
         return;
@@ -31,6 +33,7 @@ pub fn space_powerup_drop_and_pickup(
                 player_c.size,
             ) {
                 commands.entity(e).despawn();
+                sfx.write(PlaySfx(SfxKind::Powerup));
                 state.power = (state.power + 1).min(3);
                 session.score += 200;
                 state.message = match state.power {

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::render::set_text;
 use crate::game::model::{GameKind, GameSession, SaveData};
 
 use super::super::components::{BubbleCell, BubbleHud, BubbleMessage, GridBubble};
@@ -30,28 +31,25 @@ pub fn bubble_hud_update(
             }
         }
         let _ = grid_q;
-        **t = format!(
-            "分数 {}\n纪录 {}\n第 {} 关\n剩余 {} 颗\n{} 步后下移",
-            session.score,
-            high,
-            session.level,
-            left,
-            stage.shots_left_for_descend.max(0),
+        set_text(
+            &mut t,
+            &format!(
+                "分数 {}\n纪录 {}\n第 {} 关\n剩余 {} 颗\n{} 步后下移",
+                session.score,
+                high,
+                session.level,
+                left,
+                stage.shots_left_for_descend.max(0),
+            ),
         );
     }
+    // 暂停/结束由统一覆盖层显示，这里只放玩法瞬时消息
     if let Ok(mut t) = msg.single_mut() {
-        **t = if session.finished {
-            if session.won {
-                "通关！Enter 重玩，Esc 返回".to_string()
-            } else {
-                "撞到死亡线…Enter 重试，Esc 返回".to_string()
-            }
-        } else if session.paused {
-            "已暂停：Esc 继续，Backspace 返回".to_string()
-        } else if stage.message_clock > 0.0 {
-            stage.message.clone()
+        let value = if stage.message_clock > 0.0 && !session.finished {
+            stage.message.as_str()
         } else {
-            String::new()
+            ""
         };
+        set_text(&mut t, value);
     }
 }

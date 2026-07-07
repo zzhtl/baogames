@@ -74,19 +74,6 @@ impl GameKind {
         }
     }
 
-    pub(super) fn implemented(self) -> bool {
-        matches!(
-            self,
-            GameKind::Tank
-                | GameKind::BombMaze
-                | GameKind::SpaceShooter
-                | GameKind::SuperMario
-                | GameKind::Contra
-                | GameKind::BubbleBobble
-                | GameKind::MemoryMatch
-                | GameKind::Sokoban
-        )
-    }
 }
 
 #[derive(Resource)]
@@ -96,7 +83,7 @@ pub(super) struct SelectedGame(pub(super) GameKind);
 pub(super) struct SaveData {
     pub(super) high_scores: [u32; 8],
     pub(super) unlocked_levels: [u8; 8],
-    volume: f32,
+    pub(super) volume: f32,
 }
 
 impl Default for SaveData {

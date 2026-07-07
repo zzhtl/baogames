@@ -5,8 +5,10 @@
 
 mod components;
 mod constants;
+pub mod palette;
 mod resources;
 mod setup;
+pub mod sprites;
 mod systems;
 
 pub(super) use resources::SokobanStage;

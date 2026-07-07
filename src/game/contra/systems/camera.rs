@@ -10,51 +10,15 @@ pub fn contra_camera_follow(
     stage: Res<ContraStage>,
     player_q: Query<
         &Transform,
-        (
-            With<ContraPlayer>,
-            Without<Camera>,
-            Without<ContraBackground>,
-            Without<ContraHud>,
-            Without<ContraHudPanel>,
-        ),
+        (With<ContraPlayer>, Without<Camera>, Without<ContraBackground>),
     >,
     mut cam_q: Query<
         &mut Transform,
-        (
-            With<Camera>,
-            Without<ContraPlayer>,
-            Without<ContraBackground>,
-            Without<ContraHud>,
-            Without<ContraHudPanel>,
-        ),
+        (With<Camera>, Without<ContraPlayer>, Without<ContraBackground>),
     >,
     mut bg_q: Query<
         &mut Transform,
-        (
-            With<ContraBackground>,
-            Without<Camera>,
-            Without<ContraPlayer>,
-            Without<ContraHud>,
-            Without<ContraHudPanel>,
-        ),
-    >,
-    mut hud_q: Query<
-        (&ContraHud, &mut Transform),
-        (
-            Without<ContraBackground>,
-            Without<Camera>,
-            Without<ContraPlayer>,
-            Without<ContraHudPanel>,
-        ),
-    >,
-    mut hudp_q: Query<
-        (&ContraHudPanel, &mut Transform),
-        (
-            Without<ContraBackground>,
-            Without<Camera>,
-            Without<ContraPlayer>,
-            Without<ContraHud>,
-        ),
+        (With<ContraBackground>, Without<Camera>, Without<ContraPlayer>),
     >,
 ) {
     let Ok(ptr) = player_q.single() else { return };
@@ -70,16 +34,9 @@ pub fn contra_camera_follow(
         ctr.translation.x = cam_min;
     }
     ctr.translation.y = 0.0;
+    // HUD 挂在相机子节点上自动跟随，这里只需同步背景
     for mut btr in &mut bg_q {
         btr.translation.x = ctr.translation.x;
         btr.translation.y = ctr.translation.y;
-    }
-    for (hud, mut tr) in &mut hud_q {
-        tr.translation.x = ctr.translation.x + hud.offset.x;
-        tr.translation.y = ctr.translation.y + hud.offset.y;
-    }
-    for (hudp, mut tr) in &mut hudp_q {
-        tr.translation.x = ctr.translation.x + hudp.offset.x;
-        tr.translation.y = ctr.translation.y + hudp.offset.y;
     }
 }

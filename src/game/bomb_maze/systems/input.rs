@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::common::input::input_for;
 use crate::game::model::{GameKind, GameSession};
 
@@ -19,6 +20,7 @@ pub fn bm_player_input(
     hard_walls: Query<&BMTilePos, With<BMHardWall>>,
     soft_walls: Query<&BMTilePos, With<BMSoftWall>>,
     mut bombs: Query<(Entity, &mut BMBomb, &BMTilePos)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::BombMaze || session.paused || session.finished {
         return;
@@ -135,6 +137,7 @@ pub fn bm_player_input(
     // 实际放置炸弹
     for (owner, c, r, range, remote) in place_requests {
         let bomb = spawn_bm_bomb(&mut commands, c, r, range, Some(owner), remote);
+        sfx.write(PlaySfx(SfxKind::Place));
         if let Ok((_e, _, mut p)) = players.get_mut(owner) {
             p.bombs_alive += 1;
             p.walking_off.push(bomb);

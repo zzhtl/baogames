@@ -2,8 +2,10 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use std::time::Duration;
 
-use crate::common::render::{UiFont, panel, rect, text};
+use crate::common::constants::{FONT_HEADING, FONT_SMALL};
+use crate::common::render::{UiFont, attach_sprite_parts, rect};
 use crate::common::sprite_def::SpriteDef;
+use crate::game::hud::{hud_panel, hud_text};
 use crate::game::model::{Collider, GameEntity, Lifetime};
 
 use super::components::*;
@@ -14,12 +16,12 @@ use super::sprites::{
 };
 use super::waves::build_wave;
 
-pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
+pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
     paint_background(commands);
     spawn_starfield(commands);
     paint_frame(commands);
     spawn_player_ship(commands, Vec2::new(PLAYER_RESPAWN_X, PLAYER_RESPAWN_Y));
-    spawn_hud(commands, font);
+    spawn_hud(commands, font, hud_root);
 
     commands.insert_resource(SpaceState {
         power: 1,
@@ -126,75 +128,59 @@ fn paint_frame(commands: &mut Commands) {
     .insert(SpaceFrame);
 }
 
-fn spawn_hud(commands: &mut Commands, font: &UiFont) {
+fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
     let hud_x = PLAY_RIGHT + 110.0;
-    panel(
+    hud_panel(
         commands,
+        hud_root,
         Vec2::new(hud_x, 180.0),
         Vec2::new(180.0, 230.0),
         Color::srgb(0.06, 0.08, 0.14),
         Color::srgb(0.36, 0.48, 0.78),
-        GameEntity,
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "太空射击",
         Vec2::new(hud_x, 270.0),
-        20.0,
+        FONT_HEADING,
         Color::srgb(0.78, 0.92, 1.0),
-        GameEntity,
+        (),
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "P1\nWASD 移动\nJ / 空格 射击\nEsc 暂停",
         Vec2::new(hud_x, 195.0),
-        14.0,
+        FONT_SMALL,
         Color::srgb(0.7, 0.84, 1.0),
-        GameEntity,
+        (),
     );
 
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "",
         Vec2::new(hud_x, 110.0),
         16.0,
         Color::srgb(1.0, 0.94, 0.7),
-        GameEntity,
-    )
-    .insert(SpaceHud);
+        SpaceHud,
+    );
 
     // 居中提示
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "",
         Vec2::new(PLAY_OFFSET_X, PLAY_TOP - 60.0),
         24.0,
         Color::srgb(1.0, 0.92, 0.5),
-        GameEntity,
-    )
-    .insert(SpaceMessageText)
-    .insert(Transform::from_translation(Vec3::new(
-        PLAY_OFFSET_X,
-        PLAY_TOP - 60.0,
-        Z_HUD,
-    )));
-}
-
-/// 按 SpriteDef 给父实体挂子块（与离线预览同源）。
-fn spawn_def_children(commands: &mut Commands, parent: Entity, def: &SpriteDef) {
-    for p in def.parts {
-        commands
-            .spawn((
-                Sprite::from_color(p.color, Vec2::new(p.w, p.h)),
-                Transform::from_translation(Vec3::new(p.dx, p.dy, p.dz)),
-                GameEntity,
-            ))
-            .insert(ChildOf(parent));
-    }
+        SpaceMessageText,
+    );
 }
 
 fn enemy_def(kind: EnemyKind) -> &'static SpriteDef {
@@ -223,7 +209,7 @@ pub fn spawn_player_ship(commands: &mut Commands, pos: Vec2) {
             },
         ))
         .id();
-    spawn_def_children(commands, parent, &SHIP_PLAYER);
+    attach_sprite_parts(commands, parent, &SHIP_PLAYER, GameEntity);
 }
 
 pub fn spawn_enemy(
@@ -249,7 +235,7 @@ pub fn spawn_enemy(
             Collider { size: kind.collider() },
         ))
         .id();
-    spawn_def_children(commands, parent, enemy_def(kind));
+    attach_sprite_parts(commands, parent, enemy_def(kind), GameEntity);
     parent
 }
 
@@ -287,7 +273,7 @@ pub fn spawn_powerup(commands: &mut Commands, pos: Vec2) {
             Collider { size: Vec2::splat(22.0) },
         ))
         .id();
-    spawn_def_children(commands, parent, &POWERUP_P);
+    attach_sprite_parts(commands, parent, &POWERUP_P, GameEntity);
 }
 
 pub fn spawn_explosion(commands: &mut Commands, pos: Vec2, big: bool) {

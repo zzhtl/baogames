@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
+use crate::common::render::set_text;
 use crate::game::model::{GameKind, GameSession, SaveData};
 
 use super::components::*;
@@ -11,6 +13,7 @@ pub fn sokoban_input(
     time: Res<Time>,
     session: Res<GameSession>,
     mut stage: ResMut<SokobanStage>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::Sokoban || session.paused || session.finished {
         return;
@@ -32,6 +35,7 @@ pub fn sokoban_input(
         stage.move_cd = 0.0;
         stage.message = "本关已重置".to_string();
         stage.message_clock = 1.2;
+        sfx.write(PlaySfx(SfxKind::Flip));
         return;
     }
 
@@ -61,8 +65,20 @@ pub fn sokoban_input(
         return;
     }
 
+    let pushes_before = stage.pushes;
     if try_move(&mut stage, dir) {
         stage.move_cd = MOVE_COOLDOWN;
+        if stage.pushes > pushes_before {
+            // 被推箱子的新位置 = 玩家新位置 + dir
+            let (bc, br) = (stage.player.0 + dir.0, stage.player.1 + dir.1);
+            if stage.tile_at(bc, br) == Tile::Goal {
+                sfx.write(PlaySfx(SfxKind::Match));
+            } else {
+                sfx.write(PlaySfx(SfxKind::Place));
+            }
+        } else {
+            sfx.write(PlaySfx(SfxKind::MenuMove));
+        }
     } else {
         // 撞墙时缩短冷却，长按时手感更跟手。
         stage.move_cd = MOVE_COOLDOWN * 0.5;
@@ -124,28 +140,34 @@ pub fn sokoban_box_visual_sync(
     session: Res<GameSession>,
     stage: Res<SokobanStage>,
     box_q: Query<(&SokoBox, &Children)>,
-    mut border_q: Query<&mut Sprite, (With<SokoBoxBorder>, Without<SokoBoxInner>)>,
-    mut inner_q: Query<&mut Sprite, (With<SokoBoxInner>, Without<SokoBoxBorder>)>,
+    mut normal_q: Query<&mut Visibility, (With<SokoBoxNormal>, Without<SokoBoxDone>)>,
+    mut done_q: Query<&mut Visibility, (With<SokoBoxDone>, Without<SokoBoxNormal>)>,
 ) {
     if session.kind != GameKind::Sokoban {
         return;
     }
+    // 普通 / 完成两组按是否压在目标点上互斥显示；set-if-changed 避免每帧标脏
+    let apply = |v: &mut Visibility, on: bool| {
+        let target = if on {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *v != target {
+            *v = target;
+        }
+    };
     for (b, children) in &box_q {
         let Some(&(c, r)) = stage.boxes.get(b.index) else {
             continue;
         };
         let on_goal = stage.tile_at(c, r) == Tile::Goal;
-        let (border, inner) = if on_goal {
-            (COLOR_BOX_DONE_BORDER, COLOR_BOX_DONE_INNER)
-        } else {
-            (COLOR_BOX_BORDER, COLOR_BOX_INNER)
-        };
         for child in children {
-            if let Ok(mut sp) = border_q.get_mut(*child) {
-                sp.color = border;
+            if let Ok(mut v) = normal_q.get_mut(*child) {
+                apply(&mut v, !on_goal);
             }
-            if let Ok(mut sp) = inner_q.get_mut(*child) {
-                sp.color = inner;
+            if let Ok(mut v) = done_q.get_mut(*child) {
+                apply(&mut v, on_goal);
             }
         }
     }
@@ -173,7 +195,7 @@ pub fn sokoban_check_finish(
         session.finished = true;
         session.won = true;
         session.status = format!(
-            "通关！步数 {} 推箱 {} +{} 时间",
+            "步数 {} · 推箱 {} · 时间奖励 +{}",
             stage.moves, stage.pushes, time_bonus
         );
         if session.score > save.high_scores[idx] {
@@ -189,7 +211,7 @@ pub fn sokoban_check_finish(
     if stage.time_left <= 0.0 {
         session.finished = true;
         session.won = false;
-        session.status = "时间到，按 Enter 再试一次！".to_string();
+        session.status = "时间到，箱子还没归位".to_string();
         if session.score > save.high_scores[idx] {
             save.high_scores[idx] = session.score;
             save.store();
@@ -211,24 +233,21 @@ pub fn sokoban_hud_update(
         let done = stage.boxes.iter().filter(|&&(c, r)| stage.tile_at(c, r) == Tile::Goal).count();
         let total = stage.boxes.len();
         let high = save.high_scores[GameKind::Sokoban.index()].max(session.score);
-        **t = format!(
-            "剩余 {:>3.0}s   箱子 {}/{}   步数 {}   推箱 {}   分数 {}   纪录 {}",
-            stage.time_left, done, total, stage.moves, stage.pushes, session.score, high,
+        set_text(
+            &mut t,
+            &format!(
+                "剩余 {:>3.0}s   箱子 {}/{}   步数 {}   推箱 {}   分数 {}   纪录 {}",
+                stage.time_left, done, total, stage.moves, stage.pushes, session.score, high,
+            ),
         );
     }
+    // 暂停/结束由统一覆盖层显示，这里只放玩法瞬时消息
     if let Ok(mut t) = msg.single_mut() {
-        **t = if session.finished {
-            if session.won {
-                "通关！Enter 下一关，Esc 返回".to_string()
-            } else {
-                "时间到了…Enter 重试，Esc 返回".to_string()
-            }
-        } else if session.paused {
-            "已暂停：Esc 继续，Backspace 返回".to_string()
-        } else if stage.message_clock > 0.0 {
-            stage.message.clone()
+        let value = if stage.message_clock > 0.0 && !session.finished {
+            stage.message.as_str()
         } else {
-            String::new()
+            ""
         };
+        set_text(&mut t, value);
     }
 }

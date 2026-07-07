@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use rand::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{GameKind, GameSession, SaveData};
 
 use super::super::components::*;
@@ -21,6 +22,7 @@ pub fn bubble_shot_update(
     assets: Res<BubbleAssets>,
     mut shot_q: Query<(Entity, &mut Transform, &mut FlyingBubble, &BubbleColor)>,
     grid_q: Query<(Entity, &BubbleCell), With<GridBubble>>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::BubbleBobble || session.paused || session.finished {
         return;
@@ -59,6 +61,12 @@ pub fn bubble_shot_update(
     );
 
     apply_score(&mut session, popped, fell);
+    if popped > 0 {
+        sfx.write(PlaySfx(SfxKind::Match));
+    }
+    if fell > 0 {
+        sfx.write(PlaySfx(SfxKind::Coin));
+    }
 
     if popped == 0 {
         stage.shots_left_for_descend -= 1;
@@ -289,10 +297,10 @@ fn finish_bubble(session: &mut GameSession, save: &mut SaveData, won: bool) -> b
         session.score += 1000;
         save.high_scores[idx] = save.high_scores[idx].max(session.score);
         save.unlocked_levels[idx] = save.unlocked_levels[idx].max((session.level + 1).min(10));
-        session.status = "通关！Enter 重玩，Esc 返回".to_string();
+        session.status = format!("清空全部泡泡 · 通关奖励 +1000 · 总分 {}", session.score);
     } else {
         save.high_scores[idx] = save.high_scores[idx].max(session.score);
-        session.status = "撞到死亡线…Enter 重试，Esc 返回".to_string();
+        session.status = format!("泡泡撞到死亡线 · 得分 {}", session.score);
     }
     true
 }

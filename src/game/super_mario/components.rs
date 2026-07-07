@@ -206,7 +206,7 @@ pub enum HudKind {
     Coins,
     Time,
     World,
-    Status,
+    Lives,
 }
 
 #[cfg(test)]

@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use rand::prelude::*;
 
+use crate::common::constants::{FONT_HEADING, FONT_SMALL};
 use crate::common::render::{UiFont, panel, rect, text};
+use crate::game::hud::{hud_panel, hud_text};
 use crate::game::model::GameEntity;
 
 use super::components::*;
@@ -9,7 +11,13 @@ use super::constants::*;
 use super::grid::{cell_to_pos, cols_in_row, level_idx};
 use super::resources::{BubbleAssets, BubbleStage};
 
-pub fn setup_stage(commands: &mut Commands, assets: &BubbleAssets, font: &UiFont, level: u8) {
+pub fn setup_stage(
+    commands: &mut Commands,
+    assets: &BubbleAssets,
+    font: &UiFont,
+    hud_root: Entity,
+    level: u8,
+) {
     paint_field(commands);
     paint_frame(commands);
 
@@ -43,7 +51,7 @@ pub fn setup_stage(commands: &mut Commands, assets: &BubbleAssets, font: &UiFont
     spawn_loaded_bubble(commands, assets, current, 0.0);
     spawn_next_preview(commands, assets, font, next);
     spawn_aim_dots(commands);
-    spawn_hud(commands, font);
+    spawn_hud(commands, font, hud_root);
 
     commands.insert_resource(BubbleStage {
         grid,
@@ -279,54 +287,58 @@ fn spawn_aim_dots(commands: &mut Commands) {
     }
 }
 
-fn spawn_hud(commands: &mut Commands, font: &UiFont) {
+fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
     let hud_x = PLAY_RIGHT + 110.0;
-    panel(
+    hud_panel(
         commands,
+        hud_root,
         Vec2::new(hud_x, 180.0),
         Vec2::new(180.0, 230.0),
         Color::srgb(1.0, 0.94, 0.88),
         Color::srgb(0.96, 0.66, 0.84),
-        GameEntity,
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "泡泡龙",
         Vec2::new(hud_x, 270.0),
-        24.0,
+        FONT_HEADING,
         Color::srgb(0.94, 0.38, 0.62),
-        GameEntity,
+        (),
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "P1\n← / → 或 A/D 瞄准\nSpace / J 发射\nEsc 暂停",
         Vec2::new(hud_x, 200.0),
-        14.0,
+        FONT_SMALL,
         Color::srgb(0.45, 0.32, 0.5),
-        GameEntity,
+        (),
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "",
         Vec2::new(hud_x, 110.0),
         16.0,
         Color::srgb(0.78, 0.42, 0.18),
-        GameEntity,
-    )
-    .insert(BubbleHud);
+        BubbleHud,
+    );
 
     // 中央提示
-    commands.spawn((
-        Text2d::new(""),
-        TextFont::from_font_size(24.0).with_font(font.0.clone()),
-        TextColor(Color::srgb(0.94, 0.46, 0.32)),
-        Transform::from_translation(Vec3::new(PLAY_OFFSET_X, PLAY_TOP - 56.0, Z_HUD)),
+    hud_text(
+        commands,
+        font,
+        hud_root,
+        "",
+        Vec2::new(PLAY_OFFSET_X, PLAY_TOP - 56.0),
+        24.0,
+        Color::srgb(0.94, 0.46, 0.32),
         BubbleMessage,
-        GameEntity,
-    ));
+    );
 }
 
 /// 生成一颗网格泡泡，返回主体实体；高光作为子实体随父亲一起变换与销毁。

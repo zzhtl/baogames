@@ -2,8 +2,10 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use std::time::Duration;
 
-use crate::common::render::{UiFont, rect, text};
+use crate::common::constants::{FONT_BODY, FONT_HEADING, FONT_SMALL};
+use crate::common::render::{UiFont, attach_sprite_parts, rect, text};
 use crate::common::sprite_def::SpriteDef;
+use crate::game::hud::hud_text;
 use crate::game::model::{Collider, GameEntity};
 
 use super::components::*;
@@ -13,7 +15,7 @@ use super::resources::BMStage;
 use super::sprites::*;
 
 // ========== 关卡建图 ==========
-pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
+pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
     paint_field(commands);
 
     let mut rng = thread_rng();
@@ -50,7 +52,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
         spawn_bm_enemy(commands, c, r, *kind);
     }
 
-    spawn_hud(commands, font, level);
+    spawn_hud(commands, font, hud_root, level);
 
     commands.insert_resource(BMStage {
         level,
@@ -231,19 +233,6 @@ fn paint_field(commands: &mut Commands) {
     );
 }
 
-/// 按 SpriteDef 给父实体挂子块（与离线预览同源）。
-fn bm_def_children(commands: &mut Commands, parent: Entity, def: &SpriteDef) {
-    for p in def.parts {
-        commands
-            .spawn((
-                Sprite::from_color(p.color, Vec2::new(p.w, p.h)),
-                Transform::from_translation(Vec3::new(p.dx, p.dy, p.dz)),
-                GameEntity,
-            ))
-            .insert(ChildOf(parent));
-    }
-}
-
 fn enemy_def(kind: EnemyKind) -> &'static SpriteDef {
     match kind {
         EnemyKind::Balloom => &ENEMY_BALLOOM,
@@ -264,7 +253,7 @@ fn spawn_hard_wall(commands: &mut Commands, col: i32, row: i32) {
             GameEntity,
         ))
         .id();
-    bm_def_children(commands, parent, &HARD_WALL);
+    attach_sprite_parts(commands, parent, &HARD_WALL, GameEntity);
 }
 
 fn spawn_soft_wall(commands: &mut Commands, col: i32, row: i32, hides: HiddenItem) {
@@ -281,7 +270,7 @@ fn spawn_soft_wall(commands: &mut Commands, col: i32, row: i32, hides: HiddenIte
             GameEntity,
         ))
         .id();
-    bm_def_children(commands, parent, &SOFT_WALL);
+    attach_sprite_parts(commands, parent, &SOFT_WALL, GameEntity);
 }
 
 pub fn spawn_bm_player(commands: &mut Commands, id: usize, spawn: (i32, i32)) {
@@ -298,7 +287,7 @@ pub fn spawn_bm_player(commands: &mut Commands, id: usize, spawn: (i32, i32)) {
             GameEntity,
         ))
         .id();
-    bm_def_children(commands, parent, def);
+    attach_sprite_parts(commands, parent, def, GameEntity);
 }
 
 fn spawn_bm_enemy(commands: &mut Commands, col: i32, row: i32, kind: EnemyKind) {
@@ -320,7 +309,7 @@ fn spawn_bm_enemy(commands: &mut Commands, col: i32, row: i32, kind: EnemyKind) 
             GameEntity,
         ))
         .id();
-    bm_def_children(commands, parent, enemy_def(kind));
+    attach_sprite_parts(commands, parent, enemy_def(kind), GameEntity);
 }
 
 pub fn spawn_bm_bomb(
@@ -357,7 +346,7 @@ pub fn spawn_bm_bomb(
             GameEntity,
         ))
         .id();
-    bm_def_children(commands, parent, &BOMB_DEF);
+    attach_sprite_parts(commands, parent, &BOMB_DEF, GameEntity);
     parent
 }
 
@@ -375,7 +364,7 @@ pub fn spawn_bm_flame(commands: &mut Commands, pos: Vec2, _color: Color) {
             GameEntity,
         ))
         .id();
-    bm_def_children(commands, parent, &FLAME_DEF);
+    attach_sprite_parts(commands, parent, &FLAME_DEF, GameEntity);
 }
 
 pub fn spawn_bm_powerup(
@@ -422,151 +411,64 @@ pub fn spawn_bm_exit(commands: &mut Commands, col: i32, row: i32) {
             GameEntity,
         ))
         .id();
-    bm_def_children(commands, parent, &EXIT_DEF);
+    attach_sprite_parts(commands, parent, &EXIT_DEF, GameEntity);
 }
 
 // ========== HUD ==========
-fn spawn_hud(commands: &mut Commands, font: &UiFont, level: u8) {
+fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
     let hud_x = BM_OFFSET_X + BM_PLAY_W * 0.5 + 95.0;
     let top_y = BM_OFFSET_Y + BM_PLAY_H * 0.5;
+    let label_color = Color::srgb(0.85, 0.85, 0.85);
 
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "炸弹迷宫",
         Vec2::new(hud_x, top_y - 18.0),
-        20.0,
+        FONT_HEADING,
         Color::srgb(0.95, 0.78, 0.32),
-        GameEntity,
+        (),
     );
-    text(
-        commands,
-        font,
-        "STAGE",
-        Vec2::new(hud_x, top_y - 50.0),
-        14.0,
-        Color::srgb(0.85, 0.85, 0.85),
-        GameEntity,
-    );
-    text(
-        commands,
-        font,
-        &format!("{}", level),
-        Vec2::new(hud_x, top_y - 72.0),
-        24.0,
-        Color::srgb(1.0, 0.85, 0.3),
-        GameEntity,
-    )
-    .insert(BMHud::Stage);
 
-    text(
-        commands,
-        font,
-        "时间",
-        Vec2::new(hud_x, top_y - 110.0),
-        14.0,
-        Color::srgb(0.85, 0.85, 0.85),
-        GameEntity,
-    );
-    text(
-        commands,
-        font,
-        "200",
-        Vec2::new(hud_x, top_y - 132.0),
-        20.0,
-        Color::srgb(0.45, 0.85, 1.0),
-        GameEntity,
-    )
-    .insert(BMHud::Time);
-
-    text(
-        commands,
-        font,
-        "得分",
-        Vec2::new(hud_x, top_y - 168.0),
-        14.0,
-        Color::srgb(0.85, 0.85, 0.85),
-        GameEntity,
-    );
-    text(
-        commands,
-        font,
-        "0",
-        Vec2::new(hud_x, top_y - 190.0),
-        20.0,
-        Color::srgb(0.95, 0.6, 0.4),
-        GameEntity,
-    )
-    .insert(BMHud::Score);
-
-    text(
-        commands,
-        font,
-        "敌人",
-        Vec2::new(hud_x, top_y - 226.0),
-        14.0,
-        Color::srgb(0.85, 0.85, 0.85),
-        GameEntity,
-    );
-    text(
-        commands,
-        font,
-        "-",
-        Vec2::new(hud_x, top_y - 248.0),
-        20.0,
-        Color::srgb(0.95, 0.4, 0.4),
-        GameEntity,
-    )
-    .insert(BMHud::Enemies);
+    // 标签 + 数值对：关卡 / 时间 / 得分 / 敌人
+    let stats: [(&str, f32, String, Color, BMHud); 4] = [
+        ("关卡", top_y - 50.0, format!("{}", level), Color::srgb(1.0, 0.85, 0.3), BMHud::Stage),
+        ("时间", top_y - 110.0, "200".into(), Color::srgb(0.45, 0.85, 1.0), BMHud::Time),
+        ("得分", top_y - 168.0, "0".into(), Color::srgb(0.95, 0.6, 0.4), BMHud::Score),
+        ("敌人", top_y - 226.0, "-".into(), Color::srgb(0.95, 0.4, 0.4), BMHud::Enemies),
+    ];
+    for (name, label_y, value, value_color, marker) in stats {
+        hud_text(commands, font, hud_root, name, Vec2::new(hud_x, label_y), FONT_SMALL, label_color, ());
+        hud_text(commands, font, hud_root, &value, Vec2::new(hud_x, label_y - 22.0), FONT_HEADING, value_color, marker);
+    }
 
     // P1 / P2 命数
-    text(
-        commands,
-        font,
-        "P1",
-        Vec2::new(hud_x - 22.0, top_y - 290.0),
-        14.0,
-        Color::srgb(0.4, 0.66, 0.96),
-        GameEntity,
-    );
-    text(
-        commands,
-        font,
-        "x3",
-        Vec2::new(hud_x - 22.0, top_y - 312.0),
-        18.0,
-        Color::srgb(0.95, 0.95, 0.95),
-        GameEntity,
-    )
-    .insert(BMHud::P1Lives);
-    text(
-        commands,
-        font,
-        "P2",
-        Vec2::new(hud_x + 22.0, top_y - 290.0),
-        14.0,
-        Color::srgb(0.96, 0.45, 0.45),
-        GameEntity,
-    );
-    text(
-        commands,
-        font,
-        "x3",
-        Vec2::new(hud_x + 22.0, top_y - 312.0),
-        18.0,
-        Color::srgb(0.95, 0.95, 0.95),
-        GameEntity,
-    )
-    .insert(BMHud::P2Lives);
+    for (dx, name, color, marker) in [
+        (-22.0, "P1", Color::srgb(0.4, 0.66, 0.96), BMHud::P1Lives),
+        (22.0, "P2", Color::srgb(0.96, 0.45, 0.45), BMHud::P2Lives),
+    ] {
+        hud_text(commands, font, hud_root, name, Vec2::new(hud_x + dx, top_y - 290.0), FONT_SMALL, color, ());
+        hud_text(
+            commands,
+            font,
+            hud_root,
+            "x3",
+            Vec2::new(hud_x + dx, top_y - 312.0),
+            18.0,
+            Color::srgb(0.95, 0.95, 0.95),
+            marker,
+        );
+    }
 
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "炸开软砖，找到出口逃出迷宫！",
         Vec2::new(0.0, BM_OFFSET_Y - BM_PLAY_H * 0.5 - 24.0),
-        16.0,
+        FONT_BODY,
         Color::srgb(0.85, 0.92, 1.0),
-        GameEntity,
-    )
-    .insert(BMHud::Status);
+        BMHud::Status,
+    );
 }

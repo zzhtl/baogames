@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::common::input::input_for;
 use crate::game::model::{GameKind, GameSession};
 
@@ -15,6 +16,7 @@ pub fn space_player_input(
     session: Res<GameSession>,
     state: Res<SpaceState>,
     mut players: Query<(&mut Transform, &mut SpaceShipPlayer)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::SpaceShooter || session.paused || session.finished {
         return;
@@ -44,6 +46,7 @@ pub fn space_player_input(
         if input.fire && player.fire_cd_left <= 0.0 {
             let pos = t.translation.truncate();
             fire_player_volley(&mut commands, pos, state.power);
+            sfx.write(PlaySfx(SfxKind::Shoot));
             player.fire_cd_left = fire_cd;
         }
     }

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
@@ -12,6 +13,7 @@ pub fn mario_player_input(
     session: Res<GameSession>,
     mut commands: Commands,
     mut q: Query<(&mut MarioPlayer, &mut Transform)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
@@ -69,6 +71,7 @@ pub fn mario_player_input(
         player.vel.y = JUMP_VEL_BASE + extra;
         player.on_ground = false;
         player.jumping = true;
+        sfx.write(PlaySfx(SfxKind::Jump));
     }
 
     if !jump_held && player.vel.y > 0.0 {

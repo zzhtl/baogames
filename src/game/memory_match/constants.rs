@@ -55,13 +55,4 @@ pub fn pair_color(idx: u32) -> Color {
     PALETTE[(idx as usize) % PALETTE.len()]
 }
 
-pub const COLOR_BACK_BORDER: Color = Color::srgb(0.55, 0.38, 0.86);
-pub const COLOR_BACK_INNER: Color = Color::srgb(0.32, 0.22, 0.58);
-pub const COLOR_BACK_MARK: Color = Color::srgb(1.0, 0.94, 0.62);
-
-pub const COLOR_FACE_BORDER: Color = Color::srgb(0.94, 0.86, 0.62);
-pub const COLOR_FACE_INNER: Color = Color::srgb(1.0, 0.98, 0.92);
-pub const COLOR_FACE_MATCHED_BORDER: Color = Color::srgb(0.96, 0.66, 0.20);
-pub const COLOR_FACE_MATCHED_INNER: Color = Color::srgb(1.0, 0.92, 0.46);
-
 pub const COLOR_CURSOR: Color = Color::srgb(1.0, 0.94, 0.32);

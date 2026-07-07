@@ -1,11 +1,11 @@
 # baogames
 
-Rust + Bevy 编写的 6 合 1 桌面经典小游戏合集。当前版本使用程序化 2D 精灵和中文字体兜底，主菜单 6 张卡片、每款游戏拥有独立的玩法系统。
+Rust + Bevy 编写的 8 合 1 桌面经典小游戏合集。当前版本使用程序化 2D 精灵和中文字体兜底，主菜单 8 张卡片、每款游戏拥有独立的玩法系统。
 
 ## 当前进度
 
-- 主菜单展示 6 款经典：坦克大战、炸弹迷宫、太空射击、超级玛丽、魂斗罗、泡泡龙。按 `1`-`6` 选择，`Enter` 进入。
-- 6 款全部可玩：坦克大战、炸弹迷宫、太空射击、超级玛丽、魂斗罗、泡泡龙。
+- 主菜单展示 8 款经典：坦克大战、炸弹迷宫、太空射击、超级玛丽、魂斗罗、泡泡龙、记忆翻翻乐、推箱子。按 `1`-`8` 选择，`Enter` 进入。
+- 8 款全部可玩。
 - 最高分 / 关卡解锁会写入项目运行目录下的 `baogames.save`，每款游戏最高可解锁到第 10 关。
 
 ## 运行
@@ -35,13 +35,15 @@ cargo test
   - 关卡 1→10 颜色数 3→6、起始行 4→10、未消步数阈值 12→6，逐步加压。
   - `← / →` 或 `A / D` 调整炮口角度，`Space` / `J` / `↑` / `W` 发射；炮口左侧显示「下一发」预览。
   - 计分：三连+50/颗，5 连及以上额外加 30/颗（超出 4 颗的部分），浮空掉落 100/颗，通关额外 +1000。
+- `7` 记忆翻翻乐：限时翻开两张相同字符的牌完成配对，全部配对成功即通关；关卡越高牌越多、时间越紧。
+- `8` 推箱子：把所有箱子推到目标点，`R` 重置本关；十个关卡从易到难。
 
 ## 控制
 
-- 菜单：`1`-`6` 选择并进入游戏，`Enter` 进入当前选中的游戏。
+- 菜单：方向键 / `WASD` 移动高亮，`Enter` 进入选中的游戏；`1`-`8` 数字键直达。
 - P1：`WASD` 移动，`J` 射击 / 放炸弹，`K` 或 `Space` 跳跃。
 - P2：方向键 移动，`Numpad1` 射击 / 放炸弹，`Numpad2` 或 `Right Shift` 跳跃。
-- `Esc` 暂停 / 继续，游戏结束后返回菜单。
+- `Esc` 暂停 / 继续（统一覆盖层显示状态），游戏结束后返回菜单。
 - `Backspace` 从游戏返回菜单。
 - 游戏结束后按 `Enter` 重玩当前游戏。
 
@@ -54,15 +56,37 @@ cargo test
 ## 代码结构
 
 - `src/main.rs`：程序入口。
-- `src/common/`：公共常量、输入映射、字体和基础绘制工具。
+- `src/lib.rs`：库入口，供游戏本体与离线预览工具共享代码。
+- `src/common/`：公共常量、输入映射、字体、SpriteDef 精灵定义和基础绘制工具。
+- `src/bin/preview/`：离线精灵预览工具，把游戏在用的 SpriteDef 渲染成 PNG（`cargo run --bin preview`）。
 - `src/game/mod.rs`：Bevy app 组装、菜单、关卡分发与暂停 / 结束流程。
 - `src/game/model.rs`：共享状态、存档数据和基础组件。
-- `src/game/tank.rs`：坦克大战玩法系统。
-- `src/game/bomb_maze.rs`：炸弹迷宫玩法系统。
-- `src/game/space_shooter.rs`：太空射击玩法系统。
-- `src/game/super_mario.rs`：超级玛丽玩法系统。
-- `src/game/contra.rs`：魂斗罗玩法系统。
-- `src/game/bubble_shooter.rs`：泡泡龙玩法系统。
+- `src/game/tank/`：坦克大战玩法系统。
+- `src/game/bomb_maze/`：炸弹迷宫玩法系统。
+- `src/game/space_shooter/`：太空射击玩法系统。
+- `src/game/super_mario/`：超级玛丽玩法系统。
+- `src/game/contra/`：魂斗罗玩法系统。
+- `src/game/bubble_shooter/`：泡泡龙玩法系统。
+- `src/game/memory_match/`：记忆翻翻乐玩法系统。
+- `src/game/sokoban/`：推箱子玩法系统。
+
+## 音效
+
+全部音效由代码生成（方波 / 三角波 / 噪声的 8-bit 风格波形，见 `src/common/audio.rs`），无外部音频文件。射击、爆炸、跳跃、金币、配对、胜负等事件各有专属音效，菜单移动与确认也有反馈音。
+
+## 精灵预览
+
+`SpriteDef` 精灵与离线预览工具同源，改精灵前可先出图确认：
+
+```bash
+cargo run --bin preview                     # 渲染全部游戏精灵
+cargo run --bin preview -- tank p1          # 单个精灵：x8 放大图 + 实机尺寸图
+cargo run --bin preview -- memory back      # 记忆翻翻乐卡背
+cargo run --bin preview -- soko box         # 推箱子木箱
+cargo run --bin preview -- compare a.png b.png out.png   # 与参考图并排
+```
+
+产物写到 `preview_out/`。
 
 ## 素材
 

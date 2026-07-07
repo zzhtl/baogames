@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
-use crate::common::constants::{ARENA_H, ARENA_W};
-use crate::common::render::{UiFont, text};
+use crate::common::constants::{ARENA_H, ARENA_W, FONT_BODY, FONT_HEADING};
+use crate::common::render::UiFont;
+use crate::game::hud::hud_text;
 use crate::game::model::GameEntity;
 
 use super::components::*;
@@ -19,7 +20,7 @@ use super::setup_terrain::{
     spawn_question, spawn_stone,
 };
 
-pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
+pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
     let bg_color = match level {
         2 => Color::srgb(0.02, 0.02, 0.03),
         3 => Color::srgb(0.13, 0.20, 0.42),
@@ -122,7 +123,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
         spawn_bowser(commands, p);
     }
 
-    spawn_hud(commands, font, level);
+    spawn_hud(commands, font, hud_root, level);
 
     commands.insert_resource(MarioStage {
         time_left: LEVEL_TIME,
@@ -133,101 +134,40 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
     });
 }
 
-fn spawn_hud(commands: &mut Commands, font: &UiFont, level: u8) {
+fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
     let y = ARENA_H * 0.5 - 24.0;
-    text(
-        commands,
-        font,
-        "MARIO",
-        Vec2::new(-ARENA_W * 0.5 + 70.0, y),
-        16.0,
-        Color::srgb(0.95, 0.95, 0.95),
-        GameEntity,
-    );
-    let score_e = text(
-        commands,
-        font,
-        "000000",
-        Vec2::new(-ARENA_W * 0.5 + 70.0, y - 22.0),
-        18.0,
-        Color::srgb(1.0, 1.0, 1.0),
-        GameEntity,
-    )
-    .id();
-    commands.entity(score_e).insert(MarioHud { kind: HudKind::Score });
+    let label_color = Color::srgb(0.95, 0.95, 0.95);
+    let value_color = Color::WHITE;
 
-    text(
-        commands,
-        font,
-        "★",
-        Vec2::new(-100.0, y - 22.0),
-        20.0,
-        COLOR_COIN,
-        GameEntity,
-    );
-    let coin_e = text(
-        commands,
-        font,
-        "x00",
-        Vec2::new(-60.0, y - 22.0),
-        18.0,
-        Color::srgb(1.0, 1.0, 1.0),
-        GameEntity,
-    )
-    .id();
-    commands.entity(coin_e).insert(MarioHud { kind: HudKind::Coins });
-
-    text(
-        commands,
-        font,
-        "WORLD",
-        Vec2::new(120.0, y),
-        16.0,
-        Color::srgb(0.95, 0.95, 0.95),
-        GameEntity,
-    );
-    let world_e = text(
-        commands,
-        font,
-        &format!("1-{}", level.max(1)),
-        Vec2::new(120.0, y - 22.0),
-        18.0,
-        Color::srgb(1.0, 1.0, 1.0),
-        GameEntity,
-    )
-    .id();
-    commands.entity(world_e).insert(MarioHud { kind: HudKind::World });
-
-    text(
-        commands,
-        font,
-        "TIME",
-        Vec2::new(ARENA_W * 0.5 - 80.0, y),
-        16.0,
-        Color::srgb(0.95, 0.95, 0.95),
-        GameEntity,
-    );
-    let time_e = text(
-        commands,
-        font,
-        "300",
-        Vec2::new(ARENA_W * 0.5 - 80.0, y - 22.0),
-        18.0,
-        Color::srgb(1.0, 1.0, 1.0),
-        GameEntity,
-    )
-    .id();
-    commands.entity(time_e).insert(MarioHud { kind: HudKind::Time });
-
-    let status_e = text(
-        commands,
-        font,
-        "",
-        Vec2::new(0.0, 0.0),
-        28.0,
-        Color::srgb(1.0, 0.95, 0.4),
-        GameEntity,
-    )
-    .id();
-    commands.entity(status_e).insert(MarioHud { kind: HudKind::Status });
+    // 标签 + 数值五列：分数 / 金币 / 世界 / 时间 / 生命
+    let columns: [(&str, f32, &str, HudKind); 5] = [
+        ("分数", -ARENA_W * 0.5 + 70.0, "000000", HudKind::Score),
+        ("金币", -100.0, "x00", HudKind::Coins),
+        ("世界", 120.0, "1-1", HudKind::World),
+        ("时间", ARENA_W * 0.5 - 190.0, "300", HudKind::Time),
+        ("生命", ARENA_W * 0.5 - 80.0, "x3", HudKind::Lives),
+    ];
+    for (label, x, value, kind) in columns {
+        hud_text(
+            commands,
+            font,
+            hud_root,
+            label,
+            Vec2::new(x, y),
+            FONT_BODY,
+            label_color,
+            (),
+        );
+        hud_text(
+            commands,
+            font,
+            hud_root,
+            value,
+            Vec2::new(x, y - 22.0),
+            FONT_HEADING,
+            value_color,
+            MarioHud { kind },
+        );
+    }
+    let _ = level;
 }

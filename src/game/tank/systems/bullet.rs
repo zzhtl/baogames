@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{Collider, GameKind, GameSession, SaveData, Velocity};
 
 use super::super::components::*;
@@ -33,11 +34,13 @@ pub fn tank_bullet_update(
     bricks: Query<(Entity, &Transform, &Collider), (With<BrickFC>, Without<BulletFC>)>,
     steels: Query<(&Transform, &Collider), (With<SteelFC>, Without<BulletFC>)>,
     bases: Query<(Entity, &Transform, &Collider), (With<BaseFC>, Without<BulletFC>)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::Tank || session.paused || session.finished {
         return;
     }
-    let delta = time.delta_secs();
+    // 夹取 dt 防止掉帧时高速子弹穿透砖块/基地
+    let delta = time.delta_secs().min(0.033);
     let pmin = play_min();
     let pmax = play_max();
 
@@ -81,6 +84,7 @@ pub fn tank_bullet_update(
                 bullet_owner_release.push(owner);
             }
             spawn_explosion(&mut commands, pos, false);
+            sfx.write(PlaySfx(SfxKind::Hit));
             continue;
         }
 
@@ -117,6 +121,7 @@ pub fn tank_bullet_update(
             }
             stage.base_alive = false;
             spawn_explosion(&mut commands, pos, true);
+            sfx.write(PlaySfx(SfxKind::ExplosionBig));
             session.finished = true;
             session.won = false;
             session.status = "基地被打掉了！".to_string();
@@ -164,6 +169,7 @@ pub fn tank_bullet_update(
                 bullet_owner_release.push(owner);
             }
             spawn_explosion(&mut commands, pos, true);
+            sfx.write(PlaySfx(SfxKind::Explosion));
         }
     }
 
@@ -244,7 +250,7 @@ fn check_stage_completion(
         let idx = session.kind.index();
         save.high_scores[idx] = save.high_scores[idx].max(session.score);
         save.unlocked_levels[idx] = save.unlocked_levels[idx].max((session.level + 1).min(10));
-        session.status = "通关！Enter 重玩，Esc 返回".to_string();
+        session.status = format!("全歼敌军 {} 辆 · 得分 {}", STAGE_TOTAL_ENEMIES, session.score);
         return true;
     } else if !stage.base_alive {
         session.finished = true;

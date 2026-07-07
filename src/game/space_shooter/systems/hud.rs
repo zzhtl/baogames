@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::render::set_text;
 use crate::game::model::{GameKind, GameSession, SaveData};
 
 use super::super::components::*;
@@ -28,29 +29,26 @@ pub fn space_hud_update(
         } else {
             String::new()
         };
-        **t = format!(
-            "分数 {}\n纪录 {}\n生命 {}\n火力 LV.{}\n第 {} 关\n{}",
-            session.score,
-            high,
-            session.lives.max(0),
-            state.power,
-            session.level,
-            boss_line
+        set_text(
+            &mut t,
+            &format!(
+                "分数 {}\n纪录 {}\n生命 {}\n火力 LV.{}\n第 {} 关\n{}",
+                session.score,
+                high,
+                session.lives.max(0),
+                state.power,
+                session.level,
+                boss_line
+            ),
         );
     }
+    // 暂停/结束由统一覆盖层显示，这里只放玩法瞬时消息
     if let Ok(mut t) = message.single_mut() {
-        **t = if session.finished {
-            if session.won {
-                "通关！Enter 重玩，Esc 返回".to_string()
-            } else {
-                "再试一次！Enter 重玩，Esc 返回".to_string()
-            }
-        } else if session.paused {
-            "已暂停：Esc 继续，Backspace 返回".to_string()
-        } else if state.message_clock > 0.0 {
-            state.message.clone()
+        let value = if state.message_clock > 0.0 && !session.finished {
+            state.message.as_str()
         } else {
-            String::new()
+            ""
         };
+        set_text(&mut t, value);
     }
 }

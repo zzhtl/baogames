@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
@@ -122,6 +123,10 @@ pub fn apply_player_damage(
     player: &mut MarioPlayer,
     session: &mut GameSession,
 ) {
+    // 无敌/变身/死亡中不再受伤，防止同帧多个敌人重复扣命
+    if player.invincible > 0.0 || player.transform_t > 0.0 || player.dead_timer > 0.0 {
+        return;
+    }
     match player.state {
         PowerState::Fire => {
             player.state = PowerState::Big;
@@ -150,6 +155,7 @@ pub fn mario_player_vs_koopa(
     mut session: ResMut<GameSession>,
     mut player_q: Query<(Entity, &mut MarioPlayer, &Transform), Without<Koopa>>,
     mut koopa_q: Query<(&mut Koopa, &Transform), Without<MarioPlayer>>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
@@ -190,6 +196,7 @@ pub fn mario_player_vs_koopa(
                     k.vel.x = 0.0;
                     player.vel.y = STOMP_BOUNCE;
                     session.score = session.score.saturating_add(100);
+                    sfx.write(PlaySfx(SfxKind::Stomp));
                 } else if player.invincible <= 0.0 && player.transform_t <= 0.0 {
                     apply_player_damage(&mut commands, player_e, &mut player, &mut session);
                 }

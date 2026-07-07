@@ -22,6 +22,8 @@ use baogames::common::sprite_def::SpriteDef;
 use baogames::game::contra::palette as cp;
 use baogames::game::contra::sprites as cs;
 use baogames::game::bomb_maze::sprites as bms;
+use baogames::game::memory_match::sprites as ms;
+use baogames::game::sokoban::sprites as sk;
 use baogames::game::space_shooter::sprites as ss;
 use baogames::game::tank::sprites as ts;
 
@@ -46,6 +48,8 @@ fn main() {
             render_all_tank();
             render_all_space();
             render_all_bomb();
+            render_all_memory();
+            render_all_soko();
         }
         ["contra", "all"] => render_all_contra(),
         ["contra", "scene"] => render_contra_scene(),
@@ -67,6 +71,16 @@ fn main() {
         ["bomb", name] => match bomb_sprite(name) {
             Some(def) => render_sprite(&format!("bomb_{name}"), def, Color::srgb(0.16, 0.28, 0.16)),
             None => eprintln!("未知 bomb 精灵: {name}（player1/player2/balloom/oneal/doll/kondoria/bomb/hard/soft/flame/exit）"),
+        },
+        ["memory", "all"] => render_all_memory(),
+        ["memory", name] => match memory_sprite(name) {
+            Some(def) => render_sprite(&format!("memory_{name}"), def, Color::srgb(0.07, 0.09, 0.15)),
+            None => eprintln!("未知 memory 精灵: {name}（back/face/matched）"),
+        },
+        ["soko", "all"] => render_all_soko(),
+        ["soko", name] => match soko_sprite(name) {
+            Some(def) => render_sprite(&format!("soko_{name}"), def, Color::srgb(0.10, 0.13, 0.19)),
+            None => eprintln!("未知 soko 精灵: {name}（wall/floor/goal/box/boxdone/player）"),
         },
         ["compare", a, b, out] => compare(a, b, out),
         _ => eprintln!("参数无法识别，见文件头用法说明"),
@@ -167,6 +181,43 @@ fn render_all_bomb() {
     ] {
         if let Some(def) = bomb_sprite(name) {
             render_sprite(&format!("bomb_{name}"), def, Color::srgb(0.16, 0.28, 0.16));
+        }
+    }
+}
+
+fn memory_sprite(name: &str) -> Option<&'static SpriteDef> {
+    Some(match name {
+        "back" => &ms::CARD_BACK,
+        "face" => &ms::CARD_FACE,
+        "matched" | "done" => &ms::CARD_FACE_MATCHED,
+        _ => return None,
+    })
+}
+
+fn render_all_memory() {
+    for name in ["back", "face", "matched"] {
+        if let Some(def) = memory_sprite(name) {
+            render_sprite(&format!("memory_{name}"), def, Color::srgb(0.07, 0.09, 0.15));
+        }
+    }
+}
+
+fn soko_sprite(name: &str) -> Option<&'static SpriteDef> {
+    Some(match name {
+        "wall" => &sk::WALL_TILE,
+        "floor" => &sk::FLOOR_TILE,
+        "goal" => &sk::GOAL_TILE,
+        "box" => &sk::BOX_WOOD,
+        "boxdone" | "done" => &sk::BOX_DONE,
+        "player" => &sk::SOKO_PLAYER,
+        _ => return None,
+    })
+}
+
+fn render_all_soko() {
+    for name in ["wall", "floor", "goal", "box", "boxdone", "player"] {
+        if let Some(def) = soko_sprite(name) {
+            render_sprite(&format!("soko_{name}"), def, Color::srgb(0.10, 0.13, 0.19));
         }
     }
 }

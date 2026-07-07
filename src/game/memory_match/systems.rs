@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
+use crate::common::render::set_text;
 use crate::game::model::{GameKind, GameSession, SaveData};
 
 use super::components::*;
@@ -12,6 +14,7 @@ pub fn memory_input(
     mut session: ResMut<GameSession>,
     mut stage: ResMut<MemoryStage>,
     mut card_q: Query<(Entity, &mut MemoryCard)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::MemoryMatch || session.paused || session.finished {
         return;
@@ -52,9 +55,11 @@ pub fn memory_input(
                 session.score += 10;
                 stage.message = "配对成功！".to_string();
                 stage.message_clock = 1.0;
+                sfx.write(PlaySfx(SfxKind::Match));
             } else {
                 stage.message = "不一样，再想想～".to_string();
                 stage.message_clock = 1.0;
+                sfx.write(PlaySfx(SfxKind::Deny));
             }
             stage.first_pick = None;
             stage.second_pick = None;
@@ -77,8 +82,12 @@ pub fn memory_input(
     if keys.just_pressed(KeyCode::ArrowDown) || keys.just_pressed(KeyCode::KeyS) {
         row += 1;
     }
+    let (prev_col, prev_row) = (stage.cursor_col, stage.cursor_row);
     stage.cursor_col = col.clamp(0, stage.cols as i32 - 1);
     stage.cursor_row = row.clamp(0, stage.rows as i32 - 1);
+    if stage.cursor_col != prev_col || stage.cursor_row != prev_row {
+        sfx.write(PlaySfx(SfxKind::MenuMove));
+    }
 
     // 等待对比期间禁止翻牌
     if stage.second_pick.is_some() {
@@ -115,6 +124,7 @@ pub fn memory_input(
         }
     }
     stage.flips += 1;
+    sfx.write(PlaySfx(SfxKind::Flip));
     if stage.first_pick.is_none() {
         stage.first_pick = Some(target);
     } else {
@@ -123,48 +133,48 @@ pub fn memory_input(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn memory_render_sync(
     session: Res<GameSession>,
     card_q: Query<(&MemoryCard, &Children)>,
-    mut back_q: Query<&mut Visibility, (With<CardBack>, Without<CardFace>)>,
-    mut face_q: Query<&mut Visibility, (With<CardFace>, Without<CardBack>)>,
-    mut border_q: Query<&mut Sprite, (With<CardFaceBorder>, Without<CardFaceInner>)>,
-    mut inner_q: Query<&mut Sprite, (With<CardFaceInner>, Without<CardFaceBorder>)>,
+    mut back_q: Query<
+        &mut Visibility,
+        (With<CardBack>, Without<CardFace>, Without<CardFaceMatched>),
+    >,
+    mut face_q: Query<
+        &mut Visibility,
+        (With<CardFace>, Without<CardBack>, Without<CardFaceMatched>),
+    >,
+    mut matched_q: Query<
+        &mut Visibility,
+        (With<CardFaceMatched>, Without<CardBack>, Without<CardFace>),
+    >,
 ) {
     if session.kind != GameKind::MemoryMatch {
         return;
     }
+    // 三个组按 card.state 互斥显示；set-if-changed 避免每帧标脏
+    let apply = |v: &mut Visibility, on: bool| {
+        let target = if on {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *v != target {
+            *v = target;
+        }
+    };
     for (card, children) in &card_q {
-        let face_visible = card.state != CardState::FaceDown;
         for c in children {
             let child = *c;
             if let Ok(mut v) = back_q.get_mut(child) {
-                *v = if face_visible {
-                    Visibility::Hidden
-                } else {
-                    Visibility::Inherited
-                };
+                apply(&mut v, card.state == CardState::FaceDown);
             }
             if let Ok(mut v) = face_q.get_mut(child) {
-                *v = if face_visible {
-                    Visibility::Inherited
-                } else {
-                    Visibility::Hidden
-                };
+                apply(&mut v, card.state == CardState::FaceUp);
             }
-            if let Ok(mut sp) = border_q.get_mut(child) {
-                sp.color = if card.state == CardState::Matched {
-                    COLOR_FACE_MATCHED_BORDER
-                } else {
-                    COLOR_FACE_BORDER
-                };
-            }
-            if let Ok(mut sp) = inner_q.get_mut(child) {
-                sp.color = if card.state == CardState::Matched {
-                    COLOR_FACE_MATCHED_INNER
-                } else {
-                    COLOR_FACE_INNER
-                };
+            if let Ok(mut v) = matched_q.get_mut(child) {
+                apply(&mut v, card.state == CardState::Matched);
             }
         }
     }
@@ -206,7 +216,7 @@ pub fn memory_check_finish(
         session.score += time_bonus + efficiency_bonus;
         session.finished = true;
         session.won = true;
-        session.status = format!("通关！+{} 时间分", time_bonus);
+        session.status = format!("翻牌 {} 次 · 时间奖励 +{}", stage.flips, time_bonus);
         if session.score > save.high_scores[idx] {
             save.high_scores[idx] = session.score;
         }
@@ -220,7 +230,7 @@ pub fn memory_check_finish(
     if stage.time_left <= 0.0 {
         session.finished = true;
         session.won = false;
-        session.status = "时间到了，再来一次！".to_string();
+        session.status = format!("时间到，配对 {}/{}", stage.pairs_done, stage.pairs_total);
         if session.score > save.high_scores[idx] {
             save.high_scores[idx] = session.score;
             save.store();
@@ -240,24 +250,21 @@ pub fn memory_hud_update(
     }
     if let Ok(mut t) = hud.single_mut() {
         let high = save.high_scores[GameKind::MemoryMatch.index()].max(session.score);
-        **t = format!(
-            "剩余时间 {:>3.0}s   配对 {}/{}   翻牌 {}   分数 {}   纪录 {}",
-            stage.time_left, stage.pairs_done, stage.pairs_total, stage.flips, session.score, high,
+        set_text(
+            &mut t,
+            &format!(
+                "剩余时间 {:>3.0}s   配对 {}/{}   翻牌 {}   分数 {}   纪录 {}",
+                stage.time_left, stage.pairs_done, stage.pairs_total, stage.flips, session.score, high,
+            ),
         );
     }
+    // 暂停/结束由统一覆盖层显示，这里只放玩法瞬时消息
     if let Ok(mut t) = msg.single_mut() {
-        **t = if session.finished {
-            if session.won {
-                "通关！Enter 重玩，Esc 返回".to_string()
-            } else {
-                "时间到了…Enter 重试，Esc 返回".to_string()
-            }
-        } else if session.paused {
-            "已暂停：Esc 继续，Backspace 返回".to_string()
-        } else if stage.message_clock > 0.0 {
-            stage.message.clone()
+        let value = if stage.message_clock > 0.0 && !session.finished {
+            stage.message.as_str()
         } else {
-            String::new()
+            ""
         };
+        set_text(&mut t, value);
     }
 }

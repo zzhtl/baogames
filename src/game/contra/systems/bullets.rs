@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::common::render::UiFont;
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
@@ -59,6 +60,7 @@ pub fn contra_bullets_update(
             Without<ContraBoss>,
         ),
     >,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
@@ -106,6 +108,7 @@ pub fn contra_bullets_update(
                     enemy.hp -= 1;
                     if enemy.hp <= 0 {
                         spawn_explosion(&mut commands, etr.translation.truncate(), 26.0, 0.32);
+                        sfx.write(PlaySfx(SfxKind::Explosion));
                         commands.entity(ee).despawn();
                         score_gain += 100;
                     }
@@ -130,6 +133,7 @@ pub fn contra_bullets_update(
                     turret.hp -= 1;
                     if turret.hp <= 0 {
                         spawn_explosion(&mut commands, ttr.translation.truncate(), 36.0, 0.5);
+                        sfx.write(PlaySfx(SfxKind::Explosion));
                         commands.entity(te).despawn();
                         score_gain += 500;
                     }
@@ -176,6 +180,7 @@ pub fn contra_bullets_update(
                     Vec2::new(FALCON_W, FALCON_H),
                 ) {
                     spawn_explosion(&mut commands, ftr.translation.truncate(), 30.0, 0.3);
+                    sfx.write(PlaySfx(SfxKind::Explosion));
                     killed_falcons.push((ftr.translation.truncate(), falcon.weapon));
                     commands.entity(fe).despawn();
                     score_gain += 200;
@@ -195,6 +200,7 @@ pub fn contra_bullets_update(
                 let ps = player_size(player.prone);
                 if aabb_overlap(bp, bs, pp, ps) {
                     kill_player(&mut player, ptr.translation.truncate(), &mut commands);
+                    sfx.write(PlaySfx(SfxKind::Hit));
                     commands.entity(be).despawn();
                     if session.lives > 0 {
                         session.lives -= 1;

@@ -14,7 +14,8 @@ pub fn space_bullets_update(
     if session.kind != GameKind::SpaceShooter || session.paused || session.finished {
         return;
     }
-    let delta = time.delta_secs();
+    // 夹取 dt 防止掉帧时子弹跳过小型敌机
+    let delta = time.delta_secs().min(0.033);
     for (e, mut t, b) in &mut bullets {
         t.translation.x += b.vel.x * delta;
         t.translation.y += b.vel.y * delta;

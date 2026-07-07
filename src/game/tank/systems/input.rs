@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::common::input::input_for;
 use crate::game::model::{GameKind, GameSession};
 
@@ -25,6 +26,7 @@ pub fn tank_player_input(
         ),
         Without<EnemyTankFC>,
     >,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::Tank || session.paused || session.finished {
         return;
@@ -70,6 +72,7 @@ pub fn tank_player_input(
                     entity,
                 );
                 spawn_muzzle_flash(&mut commands, muzzle, *dir);
+                sfx.write(PlaySfx(SfxKind::Shoot));
                 tank.bullets_alive += 1;
                 tank.fire_cd_left = tank.fire_cd;
             }

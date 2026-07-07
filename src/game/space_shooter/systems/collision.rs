@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{Collider, GameKind, GameSession, SaveData};
 
 use super::super::components::*;
@@ -8,6 +9,7 @@ use super::super::geometry::aabb;
 use super::super::resources::SpaceState;
 use super::super::setup::{spawn_explosion, spawn_powerup};
 
+#[allow(clippy::too_many_arguments)]
 pub fn space_collisions(
     mut commands: Commands,
     mut session: ResMut<GameSession>,
@@ -25,6 +27,7 @@ pub fn space_collisions(
         (Entity, &mut Transform, &Collider, &mut SpaceShipPlayer),
         (Without<SpaceEnemy>, Without<SpaceBullet>),
     >,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::SpaceShooter || session.paused || session.finished {
         return;
@@ -34,6 +37,10 @@ pub fn space_collisions(
     for (be, bt, bc, b) in &bullets {
         if b.from_player {
             for (ee, et, ec, mut enemy) in &mut enemies {
+                // 已被本帧前一发子弹击杀（despawn 延迟生效），跳过防止重复计分/掉宝
+                if enemy.hp <= 0 {
+                    continue;
+                }
                 if aabb(
                     bt.translation.truncate(),
                     bc.size,
@@ -47,6 +54,11 @@ pub fn space_collisions(
                         let pos = et.translation.truncate();
                         let big = matches!(enemy.kind, EnemyKind::Bomber | EnemyKind::Boss);
                         spawn_explosion(&mut commands, pos, big);
+                        if enemy.kind == EnemyKind::Boss {
+                            sfx.write(PlaySfx(SfxKind::ExplosionBig));
+                        } else {
+                            sfx.write(PlaySfx(SfxKind::Explosion));
+                        }
                         if enemy.drops_power {
                             spawn_powerup(&mut commands, pos);
                         }
@@ -84,6 +96,7 @@ pub fn space_collisions(
                         &mut player,
                         &mut pt,
                         pe,
+                        &mut sfx,
                     );
                     break;
                 }
@@ -116,6 +129,7 @@ pub fn space_collisions(
                     &mut player,
                     &mut pt,
                     pe,
+                    &mut sfx,
                 );
                 break;
             }
@@ -126,6 +140,7 @@ pub fn space_collisions(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn player_take_hit(
     commands: &mut Commands,
     session: &mut GameSession,
@@ -134,10 +149,12 @@ fn player_take_hit(
     player: &mut SpaceShipPlayer,
     player_t: &mut Transform,
     player_entity: Entity,
+    sfx: &mut MessageWriter<PlaySfx>,
 ) {
     spawn_explosion(commands, player_t.translation.truncate(), true);
+    sfx.write(PlaySfx(SfxKind::Hit));
     session.lives -= 1;
-    if session.lives < 0 {
+    if session.lives <= 0 {
         session.lives = 0;
         let _ = finish_space(session, save, false);
         commands.entity(player_entity).despawn();
@@ -164,10 +181,10 @@ fn finish_space(session: &mut GameSession, save: &mut SaveData, won: bool) -> bo
         let idx = GameKind::SpaceShooter.index();
         save.high_scores[idx] = save.high_scores[idx].max(session.score);
         save.unlocked_levels[idx] = save.unlocked_levels[idx].max((session.level + 1).min(10));
-        session.status = "通关！Enter 重玩，Esc 返回".to_string();
+        session.status = format!("击破 BOSS · 通关奖励 +1000 · 总分 {}", session.score);
         true
     } else {
-        session.status = "战机被击毁……Enter 重试，Esc 返回".to_string();
+        session.status = format!("战机被击毁 · 得分 {}", session.score);
         false
     }
 }

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{Collider, GameKind, GameSession};
 
 use super::super::components::*;
@@ -14,6 +15,7 @@ pub fn bm_flame_damage(
     flames: Query<(&Transform, &Collider), With<BMFlame>>,
     enemies: Query<(Entity, &Transform, &Collider, &BMEnemy)>,
     mut players: Query<(Entity, &Transform, &Collider, &mut BMPlayer)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::BombMaze || session.paused || session.finished {
         return;
@@ -32,6 +34,7 @@ pub fn bm_flame_damage(
             if aabb_overlap(ep, ec.size, *fp, *fs) {
                 session.score += enemy.kind.score();
                 commands.entity(enemy_e).despawn();
+                sfx.write(PlaySfx(SfxKind::Hit));
                 break;
             }
         }
@@ -45,6 +48,7 @@ pub fn bm_flame_damage(
         for (fp, fs) in &flame_data {
             if aabb_overlap(pp, pc.size, *fp, *fs) {
                 hurt_player(&mut commands, &mut stage, player_e, &mut player);
+                sfx.write(PlaySfx(SfxKind::Hit));
                 break;
             }
         }
@@ -57,6 +61,7 @@ pub fn bm_enemy_touch(
     mut stage: ResMut<BMStage>,
     enemies: Query<(&Transform, &Collider), With<BMEnemy>>,
     mut players: Query<(Entity, &Transform, &Collider, &mut BMPlayer)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::BombMaze || session.paused || session.finished {
         return;
@@ -73,6 +78,7 @@ pub fn bm_enemy_touch(
         for (ep, es) in &enemy_data {
             if aabb_overlap(pp, pc.size, *ep, *es) {
                 hurt_player(&mut commands, &mut stage, player_e, &mut player);
+                sfx.write(PlaySfx(SfxKind::Hit));
                 break;
             }
         }
@@ -84,6 +90,7 @@ pub fn bm_powerup_pickup(
     mut session: ResMut<GameSession>,
     powerups: Query<(Entity, &Transform, &Collider, &BMPowerup)>,
     mut players: Query<(&Transform, &Collider, &mut BMPlayer)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::BombMaze || session.paused || session.finished {
         return;
@@ -96,6 +103,7 @@ pub fn bm_powerup_pickup(
                 player.apply_powerup(powerup.kind);
                 session.score += 50;
                 consumed.push(item_e);
+                sfx.write(PlaySfx(SfxKind::Powerup));
                 break;
             }
         }

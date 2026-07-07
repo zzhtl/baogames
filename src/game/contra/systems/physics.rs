@@ -9,7 +9,7 @@ use super::super::resources::ContraStage;
 
 pub fn contra_physics(
     time: Res<Time>,
-    session: Res<GameSession>,
+    mut session: ResMut<GameSession>,
     stage: Res<ContraStage>,
     mut player_q: Query<(&mut ContraPlayer, &mut Transform), Without<ContraSolid>>,
     solid_q: Query<(&Transform, &ContraSolid), Without<ContraPlayer>>,
@@ -102,5 +102,6 @@ pub fn contra_physics(
     if pos.y < FALL_DEATH_Y && player.dead_timer <= 0.0 {
         player.dead_timer = RESPAWN_TIME;
         player.vel = Vec2::new(0.0, 0.0);
+        session.lives -= 1;
     }
 }

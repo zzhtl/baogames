@@ -4,18 +4,23 @@ use bevy::window::WindowResolution;
 pub mod bomb_maze;
 mod bubble_shooter;
 pub mod contra;
-mod memory_match;
+mod hud;
+pub mod memory_match;
 mod model;
-mod sokoban;
+mod overlay;
+pub mod sokoban;
 pub mod space_shooter;
 mod super_mario;
 pub mod tank;
 
-use crate::common::constants::{ARENA_H, ARENA_W, WINDOW_H, WINDOW_W};
+use crate::common::audio::{PlaySfx, SfxKind};
+use crate::common::constants::{ARENA_H, ARENA_W, WINDOW_H, WINDOW_W, Z_HUD_LAYER};
 use crate::common::render::{UiFont, background_rect, panel, rect, text};
 use model::*;
+use overlay::OverlayEntity;
 
 pub fn run() {
+    let save = SaveData::load();
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -26,20 +31,26 @@ pub fn run() {
             }),
             ..default()
         }))
+        .add_plugins(crate::common::audio::SfxPlugin)
+        .insert_resource(bevy::audio::GlobalVolume {
+            volume: bevy::audio::Volume::Linear(save.volume),
+        })
         .insert_resource(ClearColor(Color::srgb(0.08, 0.09, 0.11)))
         .insert_resource(SelectedGame(GameKind::Tank))
-        .insert_resource(SaveData::load())
+        .insert_resource(save)
         .init_resource::<UiFont>()
         .init_resource::<bubble_shooter::BubbleAssets>()
         .init_state::<AppState>()
         .add_systems(Startup, setup_camera)
-        .add_systems(OnEnter(AppState::Menu), setup_menu)
+        .add_systems(OnEnter(AppState::Menu), (reset_camera, setup_menu).chain())
         .add_systems(Update, menu_input.run_if(in_state(AppState::Menu)))
         .add_systems(OnExit(AppState::Menu), cleanup::<MenuEntity>)
-        .add_systems(OnEnter(AppState::Playing), setup_game)
+        .add_systems(OnEnter(AppState::Playing), (reset_camera, setup_game).chain())
         .add_systems(
             Update,
-            pause_and_result_input.run_if(in_state(AppState::Playing)),
+            (pause_and_result_input, sfx_on_session_edge, overlay::overlay_sync)
+                .chain()
+                .run_if(in_state(AppState::Playing)),
         )
         .add_systems(
             Update,
@@ -121,7 +132,6 @@ pub fn run() {
                 super_mario::mario_powerup_update,
                 super_mario::mario_player_vs_powerup,
                 super_mario::mario_fireball_update,
-                super_mario::mario_brick_break,
                 super_mario::mario_shard_update,
             )
                 .chain()
@@ -215,7 +225,11 @@ pub fn run() {
         )
         .add_systems(
             OnExit(AppState::Playing),
-            (cleanup::<GameEntity>, cleanup_stage_resources),
+            (
+                cleanup::<GameEntity>,
+                cleanup::<OverlayEntity>,
+                cleanup_stage_resources,
+            ),
         )
         .run();
 }
@@ -233,7 +247,21 @@ fn setup_camera(mut commands: Commands) {
     ));
 }
 
-fn setup_menu(mut commands: Commands, save: Res<SaveData>, font: Res<UiFont>) {
+/// 相机是常驻实体，魂斗罗/超级玛丽会横向平移它；
+/// 进菜单/进游戏（含重开）时必须复位，否则画面停留在上一局的偏移处。
+fn reset_camera(mut cam_q: Query<&mut Transform, With<Camera2d>>) {
+    for mut t in &mut cam_q {
+        t.translation.x = 0.0;
+        t.translation.y = 0.0;
+    }
+}
+
+fn setup_menu(
+    mut commands: Commands,
+    save: Res<SaveData>,
+    font: Res<UiFont>,
+    selected: Res<SelectedGame>,
+) {
     background_rect(
         &mut commands,
         Vec2::ZERO,
@@ -357,10 +385,8 @@ fn setup_menu(mut commands: Commands, save: Res<SaveData>, font: Res<UiFont>) {
     let card_w = 360.0;
     let card_h = 70.0;
     for (i, kind) in GameKind::ALL.iter().enumerate() {
-        let col = (i % 2) as f32;
-        let row = (i / 2) as f32;
-        let cx = -190.0 + col * 380.0;
-        let cy = 70.0 - row * 78.0;
+        let center = menu_card_center(i);
+        let (cx, cy) = (center.x, center.y);
         let accent = menu_accent(*kind);
         panel(
             &mut commands,
@@ -404,15 +430,11 @@ fn setup_menu(mut commands: Commands, save: Res<SaveData>, font: Res<UiFont>) {
             Color::srgb(1.0, 0.96, 0.86),
             MenuEntity,
         );
-        let info = if kind.implemented() {
-            format!(
-                "最高分 {}   已解锁第 {} 关",
-                save.high_scores[kind.index()],
-                save.unlocked_levels[kind.index()]
-            )
-        } else {
-            "敬请期待".to_string()
-        };
+        let info = format!(
+            "最高分 {}   已解锁第 {} 关",
+            save.high_scores[kind.index()],
+            save.unlocked_levels[kind.index()]
+        );
         text(
             &mut commands,
             &font,
@@ -427,12 +449,49 @@ fn setup_menu(mut commands: Commands, save: Res<SaveData>, font: Res<UiFont>) {
     text(
         &mut commands,
         &font,
-        "选好就按 Enter 出发吧！",
+        "方向键选择 · Enter 开始 · 数字 1-8 直达",
         Vec2::new(0.0, -244.0),
         17.0,
         Color::srgb(0.55, 0.7, 0.86),
         MenuEntity,
     );
+
+    spawn_menu_cursor(&mut commands, selected.0.index());
+}
+
+/// 菜单第 i 张卡片的中心（2 列 × 4 行网格）。
+fn menu_card_center(i: usize) -> Vec2 {
+    Vec2::new(
+        -190.0 + (i % 2) as f32 * 380.0,
+        70.0 - (i / 2) as f32 * 78.0,
+    )
+}
+
+/// 选中高亮：环绕当前卡片的 4 条金色边。
+#[derive(Component)]
+struct MenuCursor {
+    offset: Vec2,
+}
+
+fn spawn_menu_cursor(commands: &mut Commands, index: usize) {
+    let frame = Vec2::new(368.0, 78.0);
+    let bar = 4.0;
+    let color = Color::srgb(1.0, 0.88, 0.42);
+    let center = menu_card_center(index);
+    let edges: [(Vec2, Vec2); 4] = [
+        (Vec2::new(0.0, frame.y * 0.5), Vec2::new(frame.x + bar, bar)),
+        (Vec2::new(0.0, -frame.y * 0.5), Vec2::new(frame.x + bar, bar)),
+        (Vec2::new(-frame.x * 0.5, 0.0), Vec2::new(bar, frame.y + bar)),
+        (Vec2::new(frame.x * 0.5, 0.0), Vec2::new(bar, frame.y + bar)),
+    ];
+    for (offset, size) in edges {
+        commands.spawn((
+            Sprite::from_color(color, size),
+            Transform::from_translation((center + offset).extend(5.0)),
+            MenuCursor { offset },
+            MenuEntity,
+        ));
+    }
 }
 
 fn menu_accent(kind: GameKind) -> Color {
@@ -452,7 +511,10 @@ fn menu_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut selected: ResMut<SelectedGame>,
     mut next_state: ResMut<NextState<AppState>>,
+    mut cursor_q: Query<(&MenuCursor, &mut Transform)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
+    // 数字键直达
     let choices = [
         (KeyCode::Digit1, GameKind::Tank),
         (KeyCode::Digit2, GameKind::BombMaze),
@@ -466,10 +528,41 @@ fn menu_input(
     for (key, kind) in choices {
         if keys.just_pressed(key) {
             selected.0 = kind;
+            sfx.write(PlaySfx(SfxKind::MenuConfirm));
             next_state.set(AppState::Playing);
+            // 直达后立即返回，防止同帧方向键覆盖选中项
+            return;
         }
     }
+
+    // 方向键 / WASD 移动高亮（2 列 × 4 行）
+    let idx = selected.0.index();
+    let mut next = idx;
+    if (keys.just_pressed(KeyCode::ArrowLeft) || keys.just_pressed(KeyCode::KeyA)) && idx % 2 == 1 {
+        next = idx - 1;
+    }
+    if (keys.just_pressed(KeyCode::ArrowRight) || keys.just_pressed(KeyCode::KeyD)) && idx % 2 == 0
+    {
+        next = idx + 1;
+    }
+    if (keys.just_pressed(KeyCode::ArrowUp) || keys.just_pressed(KeyCode::KeyW)) && idx >= 2 {
+        next = idx - 2;
+    }
+    if (keys.just_pressed(KeyCode::ArrowDown) || keys.just_pressed(KeyCode::KeyS)) && idx + 2 < 8 {
+        next = idx + 2;
+    }
+    if next != idx {
+        selected.0 = GameKind::ALL[next];
+        sfx.write(PlaySfx(SfxKind::MenuMove));
+        let center = menu_card_center(next);
+        for (cursor, mut tr) in &mut cursor_q {
+            tr.translation.x = center.x + cursor.offset.x;
+            tr.translation.y = center.y + cursor.offset.y;
+        }
+    }
+
     if keys.just_pressed(KeyCode::Enter) {
+        sfx.write(PlaySfx(SfxKind::MenuConfirm));
         next_state.set(AppState::Playing);
     }
 }
@@ -561,6 +654,7 @@ fn setup_game(
     save: Res<SaveData>,
     font: Res<UiFont>,
     bubble_assets: Res<bubble_shooter::BubbleAssets>,
+    camera_q: Query<Entity, With<Camera2d>>,
 ) {
     let level = save.unlocked_levels[selected.0.index()].clamp(1, 10);
     commands.insert_resource(GameSession {
@@ -574,88 +668,48 @@ fn setup_game(
         status: selected.0.goal_text().to_string(),
     });
 
+    // HUD 根：挂相机下，滚屏游戏的 HUD 自动跟随（见 hud.rs 模块说明）
+    let hud_root = commands
+        .spawn((
+            Transform::from_xyz(0.0, 0.0, Z_HUD_LAYER),
+            Visibility::default(),
+            GameEntity,
+        ))
+        .id();
+    if let Ok(camera) = camera_q.single() {
+        commands.entity(hud_root).insert(ChildOf(camera));
+    }
+
     if !matches!(selected.0, GameKind::SuperMario | GameKind::Contra) {
         paint_stage_backdrop(&mut commands, selected.0);
     }
 
     match selected.0 {
-        GameKind::Tank => tank::setup_stage(&mut commands, &font, level),
-        GameKind::BombMaze => bomb_maze::setup_stage(&mut commands, &font, level),
-        GameKind::SpaceShooter => space_shooter::setup_stage(&mut commands, &font, level),
-        GameKind::SuperMario => super_mario::setup_stage(&mut commands, &font, level),
+        GameKind::Tank => tank::setup_stage(&mut commands, &font, hud_root, level),
+        GameKind::BombMaze => bomb_maze::setup_stage(&mut commands, &font, hud_root, level),
+        GameKind::SpaceShooter => space_shooter::setup_stage(&mut commands, &font, hud_root, level),
+        GameKind::SuperMario => super_mario::setup_stage(&mut commands, &font, hud_root, level),
         GameKind::Contra => contra::setup_stage(
             &mut commands,
             &font,
+            hud_root,
             level,
             save.high_scores[GameKind::Contra.index()],
         ),
         GameKind::BubbleBobble => {
-            bubble_shooter::setup_stage(&mut commands, &bubble_assets, &font, level)
+            bubble_shooter::setup_stage(&mut commands, &bubble_assets, &font, hud_root, level)
         }
-        GameKind::MemoryMatch => memory_match::setup_stage(&mut commands, &font, level),
-        GameKind::Sokoban => sokoban::setup_stage(&mut commands, &font, level),
+        GameKind::MemoryMatch => memory_match::setup_stage(&mut commands, &font, hud_root, level),
+        GameKind::Sokoban => sokoban::setup_stage(&mut commands, &font, hud_root, level),
     }
-}
-
-#[allow(dead_code)]
-fn setup_coming_soon(commands: &mut Commands, font: &UiFont, kind: GameKind) {
-    panel(
-        commands,
-        Vec2::ZERO,
-        Vec2::new(560.0, 220.0),
-        Color::srgb(0.1, 0.13, 0.2),
-        menu_accent(kind),
-        GameEntity,
-    );
-    let title = kind.title().splitn(2, ' ').nth(1).unwrap_or(kind.title());
-    text(
-        commands,
-        font,
-        title,
-        Vec2::new(0.0, 50.0),
-        38.0,
-        Color::srgb(1.0, 0.95, 0.75),
-        GameEntity,
-    );
-    text(
-        commands,
-        font,
-        "敬请期待",
-        Vec2::new(0.0, -10.0),
-        28.0,
-        Color::srgb(0.96, 0.86, 0.5),
-        GameEntity,
-    );
-    text(
-        commands,
-        font,
-        "按 Backspace 或 Esc 返回菜单",
-        Vec2::new(0.0, -60.0),
-        16.0,
-        Color::srgb(0.7, 0.82, 0.96),
-        GameEntity,
-    );
 }
 
 fn pause_and_result_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut session: ResMut<GameSession>,
     mut next_state: ResMut<NextState<AppState>>,
-    mut commands: Commands,
     selected: Res<SelectedGame>,
-    save: Res<SaveData>,
-    font: Res<UiFont>,
-    bubble_assets: Res<bubble_shooter::BubbleAssets>,
-    game_entities: Query<Entity, With<GameEntity>>,
 ) {
-    // 占位卡片：Esc 或 Backspace 直接回菜单
-    if !selected.0.implemented() {
-        if keys.just_pressed(KeyCode::Escape) || keys.just_pressed(KeyCode::Backspace) {
-            next_state.set(AppState::Menu);
-        }
-        return;
-    }
-
     if keys.just_pressed(KeyCode::Escape) {
         if session.finished {
             next_state.set(AppState::Menu);
@@ -672,16 +726,42 @@ fn pause_and_result_input(
         next_state.set(AppState::Menu);
     }
     if session.finished && keys.just_pressed(KeyCode::Enter) {
-        for entity in &game_entities {
-            commands.entity(entity).despawn();
-        }
-        setup_game(commands, selected, save, font, bubble_assets);
+        // 重开：向 Playing 再转移一次（identity transition），
+        // 走完整的 OnExit 清理 + OnEnter 重建，与首次进入同一条路径。
+        next_state.set(AppState::Playing);
     }
+}
+
+/// 监听对局状态的沿变化，全局播放胜利 / 失败 / 暂停音效——8 个游戏免接入。
+fn sfx_on_session_edge(
+    session: Option<Res<GameSession>>,
+    mut prev: Local<(bool, bool)>,
+    mut sfx: MessageWriter<PlaySfx>,
+) {
+    let Some(session) = session else { return };
+    // 新对局的 GameSession 刚插入时复位基线，避免 Local 残留上一局的状态吞掉边沿
+    if session.is_added() {
+        *prev = (false, false);
+    }
+    let (was_finished, was_paused) = *prev;
+    if session.finished && !was_finished {
+        sfx.write(PlaySfx(if session.won {
+            SfxKind::Win
+        } else {
+            SfxKind::Lose
+        }));
+    }
+    if session.paused && !was_paused {
+        sfx.write(PlaySfx(SfxKind::Pause));
+    }
+    *prev = (session.finished, session.paused);
 }
 
 fn cleanup<T: Component>(mut commands: Commands, entities: Query<Entity, With<T>>) {
     for entity in &entities {
-        commands.entity(entity).despawn();
+        // try_despawn：父实体先被 despawn 时其子实体已随层级递归销毁，
+        // 快照里的子实体命令会落空，despawn() 会对每个落空刷一条警告。
+        commands.entity(entity).try_despawn();
     }
 }
 

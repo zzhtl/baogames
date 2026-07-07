@@ -28,7 +28,6 @@ pub const Z_FRAME: f32 = 0.4;
 pub const Z_BUBBLE: f32 = 1.2;
 pub const Z_FLYING: f32 = 1.5;
 pub const Z_CANNON: f32 = 2.0;
-pub const Z_HUD: f32 = 8.0;
 
 pub const COLORS_BY_LEVEL: [u8; 11] = [3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 6];
 pub const INITIAL_ROWS_BY_LEVEL: [usize; 11] = [4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 10];

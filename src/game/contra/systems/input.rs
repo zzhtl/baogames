@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
@@ -13,6 +14,7 @@ pub fn contra_player_input(
     session: Res<GameSession>,
     mut commands: Commands,
     mut q: Query<(&mut ContraPlayer, &mut Sprite, &mut Transform)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
@@ -108,6 +110,7 @@ pub fn contra_player_input(
             }
             _ => spawn_player_bullet(&mut commands, origin, dir, weapon),
         }
+        sfx.write(PlaySfx(SfxKind::Shoot));
         player.fire_cd = weapon.fire_cd();
     }
 

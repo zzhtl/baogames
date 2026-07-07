@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{Collider, GameKind, GameSession};
 
 use super::super::components::*;
@@ -19,6 +20,7 @@ pub fn tank_powerup_pickup(
     mut players: PlayerQuery,
     enemies: Query<Entity, With<EnemyTankFC>>,
     bases: Query<&Transform, With<BaseFC>>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::Tank || session.paused || session.finished {
         return;
@@ -49,6 +51,7 @@ pub fn tank_powerup_pickup(
             &bases,
         );
         session.score += 500;
+        sfx.write(PlaySfx(SfxKind::Powerup));
         commands.entity(pe).despawn();
     }
 }

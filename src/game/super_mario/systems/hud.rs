@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::render::set_text;
 use crate::game::model::GameSession;
 
 use super::super::components::*;
@@ -23,17 +24,11 @@ pub fn mario_hud_update(
     }
     for (mut t, hud) in &mut hud_q {
         match hud.kind {
-            HudKind::Score => *t = Text2d::new(format!("{:06}", session.score)),
-            HudKind::Coins => *t = Text2d::new(format!("x{:02}", stage.coins)),
-            HudKind::Time => *t = Text2d::new(format!("{:03}", stage.time_left.ceil() as i32)),
-            HudKind::World => *t = Text2d::new(format!("1-{}", stage.level)),
-            HudKind::Status => {
-                if session.finished {
-                    *t = Text2d::new(session.status.clone());
-                } else {
-                    *t = Text2d::new(String::new());
-                }
-            }
+            HudKind::Score => set_text(&mut t, &format!("{:06}", session.score)),
+            HudKind::Coins => set_text(&mut t, &format!("x{:02}", stage.coins)),
+            HudKind::Time => set_text(&mut t, &format!("{:03}", stage.time_left.ceil() as i32)),
+            HudKind::World => set_text(&mut t, &format!("1-{}", stage.level)),
+            HudKind::Lives => set_text(&mut t, &format!("x{}", session.lives.max(0))),
         }
     }
 }

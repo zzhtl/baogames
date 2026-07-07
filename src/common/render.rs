@@ -58,6 +58,16 @@ pub fn panel<'a, M: Component + Clone>(
     rect(commands, pos, size - Vec2::splat(4.0), fill, marker)
 }
 
+/// 仅当内容变化时才写入 `Text2d`。
+///
+/// HUD 每帧无条件覆写文本会触发 Bevy 对该实体重新排版（CJK 字形 reshape），
+/// 即使字符串没变；先比较再写可让变更检测在值未变时完全跳过。
+pub fn set_text(dst: &mut Mut<Text2d>, value: &str) {
+    if dst.0 != value {
+        value.clone_into(&mut dst.0);
+    }
+}
+
 pub fn text<'a, M: Component>(
     commands: &'a mut Commands,
     font: &UiFont,
@@ -108,4 +118,25 @@ pub fn spawn_sprite_def(
             .insert(ChildOf(parent));
     }
     parent
+}
+
+/// 给已有父实体按 [`SpriteDef`] 挂子矩形（与离线预览同源）。
+///
+/// 与 [`spawn_sprite_def`] 的区别：本函数不建父实体，且子块 z 直接用 part 的
+/// `dz`（相对父），适合父实体自带 z 的场景；后者子块 z 为 `base_z + dz`。
+pub fn attach_sprite_parts(
+    commands: &mut Commands,
+    parent: Entity,
+    def: &SpriteDef,
+    marker: impl Component + Clone,
+) {
+    for p in def.parts {
+        commands
+            .spawn((
+                Sprite::from_color(p.color, Vec2::new(p.w, p.h)),
+                Transform::from_translation(Vec3::new(p.dx, p.dy, p.dz)),
+                marker.clone(),
+            ))
+            .insert(ChildOf(parent));
+    }
 }

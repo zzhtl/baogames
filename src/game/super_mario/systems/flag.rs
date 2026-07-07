@@ -37,7 +37,15 @@ pub fn mario_flag_check(
     }
 }
 
-pub fn mario_flag_anim(time: Res<Time>, mut q: Query<(&mut Transform, &FlagBanner)>) {
+pub fn mario_flag_anim(
+    time: Res<Time>,
+    session: Res<GameSession>,
+    mut q: Query<(&mut Transform, &FlagBanner)>,
+) {
+    // 只挡暂停：通关(finished)后旗帜仍需落到底
+    if session.paused {
+        return;
+    }
     let dt = time.delta_secs();
     for (mut tr, b) in &mut q {
         if tr.translation.y > b.y_target {
@@ -80,7 +88,7 @@ fn apply_finish(session: &mut GameSession, save: &mut SaveData) -> bool {
     }
     session.finished = true;
     session.won = true;
-    session.status = "🏰 通关！按 Enter 再来一次，Esc / Backspace 回菜单".to_string();
+    session.status = format!("冲上旗杆 · 得分 {}", session.score);
     let idx = session.kind.index();
     let mut dirty = false;
     if session.score > save.high_scores[idx] {

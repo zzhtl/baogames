@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
@@ -13,6 +14,7 @@ pub fn contra_player_vs_enemy(
     mut session: ResMut<GameSession>,
     mut player_q: Query<(&mut ContraPlayer, &Transform)>,
     enemy_q: Query<(Entity, &Transform), With<ContraEnemy>>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
@@ -29,6 +31,7 @@ pub fn contra_player_vs_enemy(
         let ep = etr.translation.truncate();
         if aabb_overlap(pp, ps, ep, Vec2::new(ENEMY_W, ENEMY_H)) {
             kill_player(&mut player, pp, &mut commands);
+            sfx.write(PlaySfx(SfxKind::Hit));
             spawn_explosion(&mut commands, ep, 24.0, 0.3);
             commands.entity(ee).despawn();
             if session.lives > 0 {

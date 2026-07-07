@@ -1,11 +1,12 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
 use super::super::constants::*;
 use super::super::geometry::aabb_overlap;
-use super::super::setup_actors::build_player_visual;
+use super::koopa::apply_player_damage;
 
 pub fn mario_goomba_ai(
     time: Res<Time>,
@@ -93,6 +94,7 @@ pub fn mario_player_vs_goomba(
     mut session: ResMut<GameSession>,
     mut player_q: Query<(Entity, &mut MarioPlayer, &Transform), Without<Goomba>>,
     mut goomba_q: Query<(&mut Goomba, &Transform), Without<MarioPlayer>>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
@@ -127,28 +129,9 @@ pub fn mario_player_vs_goomba(
             g.vel.x = 0.0;
             player.vel.y = STOMP_BOUNCE;
             session.score = session.score.saturating_add(100);
-        } else if player.invincible <= 0.0 && player.transform_t <= 0.0 {
-            match player.state {
-                PowerState::Fire => {
-                    player.state = PowerState::Big;
-                    player.transform_t = 0.6;
-                    player.invincible = 1.6;
-                    commands.entity(player_e).despawn_related::<Children>();
-                    build_player_visual(&mut commands, player_e, PowerState::Big);
-                }
-                PowerState::Big => {
-                    player.state = PowerState::Small;
-                    player.transform_t = 0.6;
-                    player.invincible = 1.6;
-                    commands.entity(player_e).despawn_related::<Children>();
-                    build_player_visual(&mut commands, player_e, PowerState::Small);
-                }
-                PowerState::Small => {
-                    player.dead_timer = 2.2;
-                    player.vel = Vec2::new(0.0, 420.0);
-                    session.lives -= 1;
-                }
-            }
+            sfx.write(PlaySfx(SfxKind::Stomp));
+        } else {
+            apply_player_damage(&mut commands, player_e, &mut player, &mut session);
         }
     }
 }

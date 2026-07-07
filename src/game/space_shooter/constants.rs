@@ -22,6 +22,5 @@ pub const Z_BULLET: f32 = 1.4;
 pub const Z_PLAYER: f32 = 1.6;
 pub const Z_PARTICLE: f32 = 2.0;
 pub const Z_POWERUP: f32 = 1.8;
-pub const Z_HUD: f32 = 8.0;
 
 pub const TOTAL_WAVES_BEFORE_BOSS: usize = 7;

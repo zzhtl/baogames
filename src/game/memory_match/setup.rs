@@ -2,14 +2,18 @@ use bevy::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-use crate::common::render::{UiFont, panel, text};
+use crate::common::constants::{FONT_HEADING, FONT_SMALL};
+use crate::common::render::{UiFont, attach_sprite_parts};
+use crate::game::hud::{hud_panel, hud_text};
 use crate::game::model::GameEntity;
 
 use super::components::*;
 use super::constants::*;
+use super::palette;
 use super::resources::MemoryStage;
+use super::sprites::{CARD_BACK, CARD_CANONICAL, CARD_FACE, CARD_FACE_MATCHED};
 
-pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
+pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
     let idx = (level.clamp(1, 10) - 1) as usize;
     let (cols, rows) = LEVEL_GRID[idx];
     let total_time = LEVEL_TIME[idx];
@@ -36,7 +40,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
     }
 
     spawn_cursor(commands, Vec2::new(origin_x, origin_y), card_size);
-    spawn_hud(commands, font, level);
+    spawn_hud(commands, font, hud_root, level);
 
     commands.insert_resource(MemoryStage {
         cols,
@@ -89,61 +93,73 @@ fn spawn_card(
         ))
         .id();
 
-    // 卡背边框
-    commands.spawn((
-        Sprite::from_color(COLOR_BACK_BORDER, Vec2::splat(size)),
-        Transform::from_xyz(0.0, 0.0, 0.1),
-        CardBack,
-        GameEntity,
-        ChildOf(parent),
-    ));
-    // 卡背内层
-    commands.spawn((
-        Sprite::from_color(COLOR_BACK_INNER, Vec2::splat(size - 8.0)),
-        Transform::from_xyz(0.0, 0.0, 0.15),
-        CardBack,
-        GameEntity,
-        ChildOf(parent),
-    ));
-    // 卡背问号
+    // 三个互斥显示的组节点：卡背 / 卡面 / 已配对。
+    // 组按 canonical 64×64 绘制并整体缩放到实机卡尺寸，精灵与离线预览同源。
+    let scale = size / CARD_CANONICAL;
+    let ch = PAIR_CHARS[(pair_id as usize) % PAIR_CHARS.len()];
+    let spawn_group = |commands: &mut Commands,
+                       visible: bool,
+                       marker_spawn: fn(&mut EntityCommands)|
+     -> Entity {
+        let mut ec = commands.spawn((
+            Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(CARD_CANONICAL)),
+            Transform::from_xyz(0.0, 0.0, 0.1).with_scale(Vec3::splat(scale)),
+            if visible {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            },
+            GameEntity,
+            ChildOf(parent),
+        ));
+        marker_spawn(&mut ec);
+        ec.id()
+    };
+
+    let back = spawn_group(commands, true, |ec| {
+        ec.insert(CardBack);
+    });
+    attach_sprite_parts(commands, back, &CARD_BACK, GameEntity);
+
+    let face = spawn_group(commands, false, |ec| {
+        ec.insert(CardFace);
+    });
+    attach_sprite_parts(commands, face, &CARD_FACE, GameEntity);
+
+    let matched = spawn_group(commands, false, |ec| {
+        ec.insert(CardFaceMatched);
+    });
+    attach_sprite_parts(commands, matched, &CARD_FACE_MATCHED, GameEntity);
+
+    // 文本不放缩放组内（挂卡片父实体、直接用实机字号）：
+    // Text2d 按字号光栅化后才被 Transform.scale 拉伸，放组里会发虚。
+    // 文本带所属组的 marker，由 memory_render_sync 与组一起切换显隐。
     commands.spawn((
         Text2d::new("?"),
         TextFont::from_font_size(size * 0.55).with_font(font.0.clone()),
-        TextColor(COLOR_BACK_MARK),
+        TextColor(palette::BACK_PATTERN),
         Transform::from_xyz(0.0, 0.0, 0.2),
         CardBack,
         GameEntity,
         ChildOf(parent),
     ));
-
-    // 卡面边框
     commands.spawn((
-        Sprite::from_color(COLOR_FACE_BORDER, Vec2::splat(size)),
-        Transform::from_xyz(0.0, 0.0, 0.1),
-        Visibility::Hidden,
-        CardFace,
-        CardFaceBorder,
-        GameEntity,
-        ChildOf(parent),
-    ));
-    // 卡面内层
-    commands.spawn((
-        Sprite::from_color(COLOR_FACE_INNER, Vec2::splat(size - 8.0)),
-        Transform::from_xyz(0.0, 0.0, 0.15),
-        Visibility::Hidden,
-        CardFace,
-        CardFaceInner,
-        GameEntity,
-        ChildOf(parent),
-    ));
-    // 卡面字符
-    commands.spawn((
-        Text2d::new(PAIR_CHARS[(pair_id as usize) % PAIR_CHARS.len()].to_string()),
+        Text2d::new(ch.to_string()),
         TextFont::from_font_size(size * 0.55).with_font(font.0.clone()),
         TextColor(pair_color(pair_id)),
         Transform::from_xyz(0.0, 0.0, 0.2),
         Visibility::Hidden,
         CardFace,
+        GameEntity,
+        ChildOf(parent),
+    ));
+    commands.spawn((
+        Text2d::new(ch.to_string()),
+        TextFont::from_font_size(size * 0.55).with_font(font.0.clone()),
+        TextColor(pair_color(pair_id)),
+        Transform::from_xyz(0.0, 0.0, 0.2),
+        Visibility::Hidden,
+        CardFaceMatched,
         GameEntity,
         ChildOf(parent),
     ));
@@ -169,60 +185,64 @@ fn spawn_cursor(commands: &mut Commands, origin: Vec2, card_size: f32) {
     }
 }
 
-fn spawn_hud(commands: &mut Commands, font: &UiFont, level: u8) {
-    let hud_x = 0.0;
+fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
     let hud_y = 230.0;
-    panel(
+    hud_panel(
         commands,
-        Vec2::new(hud_x, hud_y),
+        hud_root,
+        Vec2::new(0.0, hud_y),
         Vec2::new(900.0, 50.0),
         Color::srgb(0.10, 0.13, 0.20),
         Color::srgb(0.45, 0.75, 0.96),
-        GameEntity,
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         &format!("记忆翻翻乐 · 第 {} 关", level),
         Vec2::new(-350.0, hud_y),
-        20.0,
+        FONT_HEADING,
         Color::srgb(1.0, 0.96, 0.78),
-        GameEntity,
+        (),
     );
-    commands.spawn((
-        Text2d::new(""),
-        TextFont::from_font_size(15.0).with_font(font.0.clone()),
-        TextColor(Color::srgb(0.86, 0.94, 1.0)),
-        Transform::from_translation(Vec3::new(160.0, hud_y, 10.0)),
+    hud_text(
+        commands,
+        font,
+        hud_root,
+        "",
+        Vec2::new(160.0, hud_y),
+        15.0,
+        Color::srgb(0.86, 0.94, 1.0),
         MemoryHud,
-        GameEntity,
-    ));
+    );
 
     // 底部操作提示 + 消息条
-    panel(
+    hud_panel(
         commands,
+        hud_root,
         Vec2::new(0.0, -230.0),
         Vec2::new(900.0, 50.0),
         Color::srgb(0.08, 0.10, 0.15),
         Color::srgb(0.96, 0.72, 0.32),
-        GameEntity,
     );
-    text(
+    hud_text(
         commands,
         font,
-        "方向键 / WASD 移动光标，Enter / Space 翻牌；Esc 暂停，Backspace 返回",
+        hud_root,
+        "方向键 / WASD 移动光标，Enter / Space 翻牌 · Esc 暂停 · Backspace 返回菜单",
         Vec2::new(-330.0, -230.0),
-        13.0,
+        FONT_SMALL,
         Color::srgb(0.86, 0.92, 1.0),
-        GameEntity,
+        (),
     );
-    commands.spawn((
-        Text2d::new(""),
-        TextFont::from_font_size(18.0).with_font(font.0.clone()),
-        TextColor(Color::srgb(1.0, 0.86, 0.42)),
-        Transform::from_translation(Vec3::new(280.0, -230.0, 10.0)),
+    hud_text(
+        commands,
+        font,
+        hud_root,
+        "",
+        Vec2::new(280.0, -230.0),
+        18.0,
+        Color::srgb(1.0, 0.86, 0.42),
         MemoryMessage,
-        GameEntity,
-    ));
-
+    );
 }

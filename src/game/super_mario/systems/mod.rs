@@ -14,7 +14,7 @@ pub mod platform;
 pub mod powerup;
 pub mod respawn;
 
-pub use block::{mario_block_anim, mario_brick_break};
+pub use block::mario_block_anim;
 pub use bowser::{
     mario_axe_check, mario_bowser_ai, mario_bowser_cleanup, mario_bowser_fireball_update,
     mario_player_fire_vs_bowser,

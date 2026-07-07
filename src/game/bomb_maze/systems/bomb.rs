@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::common::render::UiFont;
 use crate::game::model::{GameKind, GameSession};
 
@@ -17,6 +18,7 @@ pub fn bm_bomb_tick(
     soft_walls: Query<(Entity, &BMTilePos, &BMSoftWall)>,
     mut players: Query<&mut BMPlayer>,
     font: Res<UiFont>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::BombMaze || session.paused || session.finished {
         return;
@@ -51,6 +53,7 @@ pub fn bm_bomb_tick(
     if to_explode.is_empty() {
         return;
     }
+    sfx.write(PlaySfx(SfxKind::Explosion));
 
     // BFS 处理连环引爆
     let mut queue: std::collections::VecDeque<Entity> = to_explode.iter().copied().collect();

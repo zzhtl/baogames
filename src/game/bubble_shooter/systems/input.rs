@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{GameKind, GameSession};
 
 use super::super::components::*;
@@ -20,6 +21,7 @@ pub fn bubble_player_input(
         (Entity, &mut Transform),
         (With<LoadedBubble>, Without<CannonBarrel>),
     >,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::BubbleBobble || session.paused || session.finished {
         return;
@@ -75,5 +77,6 @@ pub fn bubble_player_input(
             commands.entity(e).despawn();
         }
         stage.shot_active = true;
+        sfx.write(PlaySfx(SfxKind::Place));
     }
 }

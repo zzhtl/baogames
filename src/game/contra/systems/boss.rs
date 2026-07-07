@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{GameSession, SaveData};
 
 use super::super::components::*;
@@ -37,6 +38,7 @@ pub fn contra_boss_update(
     mut boss_q: Query<(Entity, &mut ContraBoss, &Transform)>,
     mut turret_q: Query<(&mut ContraTurret, &Transform), Without<ContraBoss>>,
     player_q: Query<&Transform, (With<ContraPlayer>, Without<ContraBoss>, Without<ContraTurret>)>,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
@@ -62,6 +64,7 @@ pub fn contra_boss_update(
             }
             if boss.die_t <= 0.0 {
                 spawn_explosion(&mut commands, btr.translation.truncate(), 80.0, 0.7);
+                sfx.write(PlaySfx(SfxKind::ExplosionBig));
                 commands.entity(be).despawn();
                 stage.boss_dead = true;
                 if apply_boss_clear(&mut session, &mut save) {
@@ -100,8 +103,9 @@ fn apply_boss_clear(session: &mut GameSession, save: &mut SaveData) -> bool {
     }
     session.finished = true;
     session.won = true;
-    session.status = "STAGE CLEAR！Enter 重玩 / Backspace 返回菜单".to_string();
+    // 先计入通关奖励再拼 status，覆盖层显示的得分才与存档一致
     session.score = session.score.saturating_add(5000);
+    session.status = format!("要塞攻破 · 通关奖励 +5000 · 总分 {}", session.score);
     let idx = session.kind.index();
     let mut dirty = false;
     if session.score > save.high_scores[idx] {

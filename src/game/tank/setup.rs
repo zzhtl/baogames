@@ -2,8 +2,9 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use std::time::Duration;
 
-use crate::common::render::{UiFont, rect, text};
-use crate::common::sprite_def::SpriteDef;
+use crate::common::constants::{FONT_BODY, FONT_HEADING};
+use crate::common::render::{UiFont, attach_sprite_parts, rect, text};
+use crate::game::hud::hud_text;
 use crate::game::model::{Collider, GameEntity, Lifetime, Velocity};
 
 use super::components::*;
@@ -16,10 +17,10 @@ use super::sprites::{
     TANK_ENEMY_POWER, TANK_P1, TANK_P2, WATER_TILE,
 };
 
-pub fn setup_stage(commands: &mut Commands, font: &UiFont, level: u8) {
+pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
     spawn_play_field(commands);
     spawn_map(commands, level);
-    spawn_hud(commands, font, level);
+    spawn_hud(commands, font, hud_root, level);
     spawn_mode_select_ui(commands, font);
 
     commands.insert_resource(TankStage {
@@ -162,64 +163,68 @@ fn spawn_map(commands: &mut Commands, level: u8) {
     }
 }
 
-fn spawn_hud(commands: &mut Commands, font: &UiFont, level: u8) {
+fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
     let hud_x = PLAY_OFFSET_X + PLAY_SIZE * 0.5 + 90.0;
-    text(
+    hud_text(
         commands,
         font,
-        "STAGE",
+        hud_root,
+        "关卡",
         Vec2::new(hud_x, PLAY_OFFSET_Y + PLAY_SIZE * 0.5 - 24.0),
-        18.0,
+        FONT_BODY,
         Color::srgb(0.85, 0.85, 0.85),
-        GameEntity,
+        (),
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         &format!("{}", level),
         Vec2::new(hud_x, PLAY_OFFSET_Y + PLAY_SIZE * 0.5 - 50.0),
         28.0,
         Color::srgb(1.0, 0.85, 0.3),
-        GameEntity,
+        (),
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "敌方剩余",
         Vec2::new(hud_x, PLAY_OFFSET_Y + 50.0),
-        16.0,
+        FONT_BODY,
         Color::srgb(0.85, 0.85, 0.85),
-        GameEntity,
+        (),
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "20",
         Vec2::new(hud_x, PLAY_OFFSET_Y + 20.0),
         26.0,
         Color::srgb(0.95, 0.6, 0.4),
-        GameEntity,
-    )
-    .insert(TankHud);
-    text(
+        TankHud,
+    );
+    hud_text(
         commands,
         font,
+        hud_root,
         "P1",
         Vec2::new(hud_x - 22.0, PLAY_OFFSET_Y - 60.0),
-        18.0,
+        FONT_HEADING,
         Color::srgb(0.85, 0.78, 0.36),
-        GameEntity,
+        (),
     );
-    text(
+    hud_text(
         commands,
         font,
+        hud_root,
         "P2",
         Vec2::new(hud_x + 22.0, PLAY_OFFSET_Y - 60.0),
-        18.0,
+        FONT_HEADING,
         Color::srgb(0.46, 0.7, 0.95),
-        GameEntity,
-    )
-    .insert(P2Hud);
+        P2Hud,
+    );
 }
 
 
@@ -242,7 +247,7 @@ fn spawn_brick_tile(commands: &mut Commands, col: i32, row: i32) {
                     GameEntity,
                 ))
                 .id();
-            spawn_def_children(commands, parent, &BRICK_SUBTILE);
+            attach_sprite_parts(commands, parent, &BRICK_SUBTILE, GameEntity);
         }
     }
 }
@@ -260,7 +265,7 @@ fn spawn_steel(commands: &mut Commands, col: i32, row: i32) {
             GameEntity,
         ))
         .id();
-    spawn_def_children(commands, parent, &STEEL_TILE);
+    attach_sprite_parts(commands, parent, &STEEL_TILE, GameEntity);
 }
 
 fn spawn_water(commands: &mut Commands, col: i32, row: i32) {
@@ -276,7 +281,7 @@ fn spawn_water(commands: &mut Commands, col: i32, row: i32) {
             GameEntity,
         ))
         .id();
-    spawn_def_children(commands, parent, &WATER_TILE);
+    attach_sprite_parts(commands, parent, &WATER_TILE, GameEntity);
 }
 
 fn spawn_bush(commands: &mut Commands, col: i32, row: i32) {
@@ -289,7 +294,7 @@ fn spawn_bush(commands: &mut Commands, col: i32, row: i32) {
             GameEntity,
         ))
         .id();
-    spawn_def_children(commands, parent, &BUSH_TILE);
+    attach_sprite_parts(commands, parent, &BUSH_TILE, GameEntity);
 }
 
 fn spawn_ice(commands: &mut Commands, col: i32, row: i32) {
@@ -302,7 +307,7 @@ fn spawn_ice(commands: &mut Commands, col: i32, row: i32) {
             GameEntity,
         ))
         .id();
-    spawn_def_children(commands, parent, &ICE_TILE);
+    attach_sprite_parts(commands, parent, &ICE_TILE, GameEntity);
 }
 
 fn spawn_base(commands: &mut Commands, col: i32, row: i32) {
@@ -319,22 +324,10 @@ fn spawn_base(commands: &mut Commands, col: i32, row: i32) {
             GameEntity,
         ))
         .id();
-    spawn_def_children(commands, parent, &BASE_EAGLE);
+    attach_sprite_parts(commands, parent, &BASE_EAGLE, GameEntity);
 }
 
 // ========== 坦克与特效 ==========
-/// 按 SpriteDef 给坦克父实体挂子块（与离线预览同源）。子块 z 用 part 的 dz（相对父）。
-fn spawn_def_children(commands: &mut Commands, parent: Entity, def: &SpriteDef) {
-    for p in def.parts {
-        commands
-            .spawn((
-                Sprite::from_color(p.color, Vec2::new(p.w, p.h)),
-                Transform::from_translation(Vec3::new(p.dx, p.dy, p.dz)),
-                GameEntity,
-            ))
-            .insert(ChildOf(parent));
-    }
-}
 
 pub fn spawn_player_tank(commands: &mut Commands, id: usize, pos: Vec2) {
     let def = if id == 0 { &TANK_P1 } else { &TANK_P2 };
@@ -361,7 +354,7 @@ pub fn spawn_player_tank(commands: &mut Commands, id: usize, pos: Vec2) {
             },
         ))
         .id();
-    spawn_def_children(commands, parent, def);
+    attach_sprite_parts(commands, parent, def, GameEntity);
 }
 
 pub fn spawn_enemy_tank(commands: &mut Commands, pos: Vec2, kind: EnemyTankKind) {
@@ -412,7 +405,7 @@ pub fn spawn_enemy_tank(commands: &mut Commands, pos: Vec2, kind: EnemyTankKind)
             },
         ))
         .id();
-    spawn_def_children(commands, parent, def);
+    attach_sprite_parts(commands, parent, def, GameEntity);
 }
 
 pub fn spawn_spawn_effect(
@@ -504,7 +497,7 @@ pub fn spawn_powerup(commands: &mut Commands, pos: Vec2, kind: PowerUpKind) {
             GameEntity,
         ))
         .id();
-    spawn_def_children(commands, parent, def);
+    attach_sprite_parts(commands, parent, def, GameEntity);
 }
 
 /// 在世界坐标处生成一块钢墙（铲子道具给基地筑墙用）。
@@ -520,5 +513,5 @@ pub fn spawn_steel_at(commands: &mut Commands, pos: Vec2) {
             GameEntity,
         ))
         .id();
-    spawn_def_children(commands, parent, &STEEL_TILE);
+    attach_sprite_parts(commands, parent, &STEEL_TILE, GameEntity);
 }

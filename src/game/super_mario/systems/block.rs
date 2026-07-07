@@ -1,13 +1,13 @@
 use bevy::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{GameEntity, GameSession};
 
 use super::super::components::*;
 use super::super::constants::*;
-use super::super::geometry::aabb_overlap;
 use super::super::palette::*;
 use super::super::resources::MarioStage;
-use super::super::setup_actors::{spawn_brick_shards, spawn_powerup};
+use super::super::setup_actors::spawn_powerup;
 
 pub fn mario_block_anim(
     time: Res<Time>,
@@ -17,6 +17,7 @@ pub fn mario_block_anim(
     mut stage: ResMut<MarioStage>,
     player_q: Query<&MarioPlayer>,
     mut commands: Commands,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused {
         return;
@@ -58,6 +59,7 @@ pub fn mario_block_anim(
                 QuestionContent::Coin => {
                     stage.coins += 1;
                     session.score = session.score.saturating_add(200);
+                    sfx.write(PlaySfx(SfxKind::Coin));
                     commands.spawn((
                         Sprite::from_color(COLOR_COIN, Vec2::new(10.0, 14.0)),
                         Transform::from_translation(Vec3::new(
@@ -91,41 +93,3 @@ pub fn mario_block_anim(
     }
 }
 
-pub fn mario_brick_break(
-    mut commands: Commands,
-    mut session: ResMut<GameSession>,
-    mut player_q: Query<(&mut MarioPlayer, &Transform), Without<BrickTile>>,
-    brick_q: Query<(Entity, &Transform, &Solid), (With<BrickTile>, Without<MarioPlayer>)>,
-) {
-    if session.paused || session.finished {
-        return;
-    }
-    let Ok((mut player, ptr)) = player_q.single_mut() else {
-        return;
-    };
-    if player.dead_timer > 0.0 || player.finished {
-        return;
-    }
-    if matches!(player.state, PowerState::Small) {
-        return;
-    }
-    if player.vel.y <= 0.0 {
-        return;
-    }
-    let p_pos = ptr.translation.truncate();
-    let p_size = player.state.size();
-    let p_top = p_pos.y + p_size.y * 0.5;
-    for (e, btr, s) in &brick_q {
-        let bp = btr.translation.truncate();
-        if !aabb_overlap(p_pos, p_size, bp, s.size) {
-            continue;
-        }
-        let b_bottom = bp.y - s.size.y * 0.5;
-        if p_top > b_bottom - 4.0 && p_top < bp.y {
-            commands.entity(e).despawn();
-            spawn_brick_shards(&mut commands, bp);
-            session.score = session.score.saturating_add(50);
-            player.vel.y = -120.0;
-        }
-    }
-}
