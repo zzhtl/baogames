@@ -144,7 +144,7 @@ pub fn spawn_brick(commands: &mut Commands, center: Vec2) {
         commands
             .spawn((
                 Sprite::from_color(COLOR_BRICK_DARK, Vec2::new(TILE, 2.0)),
-                Transform::from_translation((center + Vec2::new(0.0, y_off)).extend(Z_TILE + 0.05)),
+                Transform::from_translation(Vec3::new(0.0, y_off, 0.05)),
                 GameEntity,
             ))
             .insert(ChildOf(entity));
@@ -152,14 +152,14 @@ pub fn spawn_brick(commands: &mut Commands, center: Vec2) {
     commands
         .spawn((
             Sprite::from_color(COLOR_BRICK_DARK, Vec2::new(2.0, 14.0)),
-            Transform::from_translation((center + Vec2::new(-8.0, 8.0)).extend(Z_TILE + 0.05)),
+            Transform::from_translation(Vec3::new(-9.0, 9.0, 0.05)),
             GameEntity,
         ))
         .insert(ChildOf(entity));
     commands
         .spawn((
             Sprite::from_color(COLOR_BRICK_DARK, Vec2::new(2.0, 14.0)),
-            Transform::from_translation((center + Vec2::new(8.0, -8.0)).extend(Z_TILE + 0.05)),
+            Transform::from_translation(Vec3::new(9.0, -9.0, 0.05)),
             GameEntity,
         ))
         .insert(ChildOf(entity));
@@ -184,14 +184,14 @@ pub fn spawn_question(commands: &mut Commands, center: Vec2, content: QuestionCo
     commands
         .spawn((
             Sprite::from_color(COLOR_QUESTION_DARK, Vec2::new(TILE, 4.0)),
-            Transform::from_translation((center + Vec2::new(0.0, TILE * 0.5 - 2.0)).extend(Z_TILE + 0.05)),
+            Transform::from_translation(Vec3::new(0.0, TILE * 0.5 - 2.0, 0.05)),
             GameEntity,
         ))
         .insert(ChildOf(entity));
     commands
         .spawn((
             Sprite::from_color(COLOR_QUESTION_DARK, Vec2::new(TILE, 4.0)),
-            Transform::from_translation((center + Vec2::new(0.0, -TILE * 0.5 + 2.0)).extend(Z_TILE + 0.05)),
+            Transform::from_translation(Vec3::new(0.0, -TILE * 0.5 + 2.0, 0.05)),
             GameEntity,
         ))
         .insert(ChildOf(entity));
@@ -207,7 +207,7 @@ pub fn spawn_question(commands: &mut Commands, center: Vec2, content: QuestionCo
         commands
             .spawn((
                 Sprite::from_color(COLOR_M_BLACK, Vec2::new(w, h)),
-                Transform::from_translation((center + Vec2::new(dx, dy)).extend(Z_TILE + 0.06)),
+                Transform::from_translation(Vec3::new(dx, dy, 0.06)),
                 GameEntity,
             ))
             .insert(ChildOf(entity));

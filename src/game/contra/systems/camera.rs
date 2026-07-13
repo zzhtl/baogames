@@ -1,12 +1,13 @@
 use bevy::prelude::*;
 
-use crate::common::constants::ARENA_W;
+use crate::common::pixel_canvas::{InGameCamera, PixelCanvasConfig};
 
 use super::super::components::*;
 use super::super::constants::CAMERA_FOLLOW_OFFSET;
 use super::super::resources::ContraStage;
 
 pub fn contra_camera_follow(
+    canvas: Res<PixelCanvasConfig>,
     stage: Res<ContraStage>,
     player_q: Query<
         &Transform,
@@ -14,7 +15,7 @@ pub fn contra_camera_follow(
     >,
     mut cam_q: Query<
         &mut Transform,
-        (With<Camera>, Without<ContraPlayer>, Without<ContraBackground>),
+        (With<InGameCamera>, Without<ContraPlayer>, Without<ContraBackground>),
     >,
     mut bg_q: Query<
         &mut Transform,
@@ -25,8 +26,9 @@ pub fn contra_camera_follow(
     let Ok(mut ctr) = cam_q.single_mut() else {
         return;
     };
-    let cam_min = ARENA_W * 0.5;
-    let cam_max = stage.world_w - ARENA_W * 0.5;
+    let viewport_w = canvas.display_mode.world_width();
+    let cam_min = viewport_w * 0.5;
+    let cam_max = stage.world_w - viewport_w * 0.5;
     let target = (ptr.translation.x + CAMERA_FOLLOW_OFFSET).clamp(cam_min, cam_max);
     if target > ctr.translation.x {
         ctr.translation.x = target;

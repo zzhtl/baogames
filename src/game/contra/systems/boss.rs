@@ -5,6 +5,7 @@ use crate::game::model::{GameSession, SaveData};
 
 use super::super::components::*;
 use super::super::constants::*;
+use super::super::geometry::quantize_direction_8;
 use super::super::resources::ContraStage;
 use super::super::setup_actors::{spawn_enemy_bullet, spawn_explosion};
 
@@ -29,6 +30,11 @@ fn turret_cd_for_phase(phase: u8) -> f32 {
     }
 }
 
+fn rotate_direction(dir: Vec2, angle: f32) -> Vec2 {
+    let (sin, cos) = angle.sin_cos();
+    Vec2::new(dir.x * cos - dir.y * sin, dir.x * sin + dir.y * cos)
+}
+
 pub fn contra_boss_update(
     time: Res<Time>,
     mut session: ResMut<GameSession>,
@@ -36,7 +42,7 @@ pub fn contra_boss_update(
     mut commands: Commands,
     mut stage: ResMut<ContraStage>,
     mut boss_q: Query<(Entity, &mut ContraBoss, &Transform)>,
-    mut turret_q: Query<(&mut ContraTurret, &Transform), Without<ContraBoss>>,
+    mut turret_q: Query<(Entity, &mut ContraTurret, &Transform), Without<ContraBoss>>,
     player_q: Query<&Transform, (With<ContraPlayer>, Without<ContraBoss>, Without<ContraTurret>)>,
     mut sfx: MessageWriter<PlaySfx>,
 ) {
@@ -66,6 +72,9 @@ pub fn contra_boss_update(
                 spawn_explosion(&mut commands, btr.translation.truncate(), 80.0, 0.7);
                 sfx.write(PlaySfx(SfxKind::ExplosionBig));
                 commands.entity(be).despawn();
+                for (turret_entity, _, _) in &mut turret_q {
+                    commands.entity(turret_entity).despawn();
+                }
                 stage.boss_dead = true;
                 if apply_boss_clear(&mut session, &mut save) {
                     save.store();
@@ -74,19 +83,17 @@ pub fn contra_boss_update(
             continue;
         }
         let phase = boss_phase(boss.hp, stage.boss_hp);
-        for (mut turret, ttr) in &mut turret_q {
+        for (_, mut turret, ttr) in &mut turret_q {
+            turret.hit_t = (turret.hit_t - dt).max(0.0);
             turret.fire_cd = (turret.fire_cd - dt).max(0.0);
             if turret.fire_cd <= 0.0 {
                 if let Some(pp) = player_pos {
                     let origin = ttr.translation.truncate() + Vec2::new(-22.0, 0.0);
-                    let mut dir = pp - origin;
-                    if dir.length_squared() < 4.0 {
-                        dir = Vec2::new(-1.0, 0.0);
-                    }
+                    let dir = quantize_direction_8(pp - origin);
                     spawn_enemy_bullet(&mut commands, origin, dir);
                     // 阶段 3：追加一发偏上的扇形弹，弹幕更密
                     if phase >= 3 {
-                        spawn_enemy_bullet(&mut commands, origin, dir + Vec2::new(0.0, 70.0));
+                        spawn_enemy_bullet(&mut commands, origin, rotate_direction(dir, 0.24));
                     }
                     turret.fire_cd = turret_cd_for_phase(phase);
                 }

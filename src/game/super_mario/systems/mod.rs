@@ -21,14 +21,14 @@ pub use bowser::{
 };
 pub use camera::mario_camera_follow;
 pub use coin::mario_coin_popup;
-pub use effects::{mario_player_blink, mario_shard_update};
+pub use effects::{mario_player_animation, mario_player_blink, mario_shard_update};
 pub use fireball::mario_fireball_update;
 pub use flag::{mario_finish_seq, mario_flag_anim, mario_flag_check};
 pub use goomba::{mario_goomba_ai, mario_player_vs_goomba};
 pub use hud::{mario_hud_update, mario_time_check};
-pub use input::mario_player_input;
+pub use input::{mario_player_input, mario_sample_input};
 pub use koopa::{mario_koopa_ai, mario_player_vs_koopa, mario_shell_kills};
 pub use physics::mario_physics;
 pub use platform::{mario_lava_check, mario_platform_update};
 pub use powerup::{mario_player_vs_powerup, mario_powerup_update};
-pub use respawn::mario_respawn;
+pub use respawn::{mario_checkpoint_update, mario_respawn};

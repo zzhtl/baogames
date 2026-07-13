@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::common::constants::ARENA_W;
+use crate::common::pixel_canvas::{InGameCamera, PixelCanvasConfig};
 use crate::game::model::GameSession;
 
 use super::super::resources::{ContraStage, EnemySpawnMark, FalconMark};
@@ -9,14 +9,15 @@ use super::super::setup_actors::{spawn_boss, spawn_enemy, spawn_falcon};
 pub fn contra_spawner(
     session: Res<GameSession>,
     mut commands: Commands,
-    cam_q: Query<&Transform, With<Camera>>,
+    canvas: Res<PixelCanvasConfig>,
+    cam_q: Query<&Transform, With<InGameCamera>>,
     mut stage: ResMut<ContraStage>,
 ) {
     if session.paused || session.finished {
         return;
     }
     let Ok(cam) = cam_q.single() else { return };
-    let cam_right = cam.translation.x + ARENA_W * 0.5;
+    let cam_right = cam.translation.x + canvas.display_mode.world_width() * 0.5;
     while stage.spawn_idx < stage.spawn_marks.len()
         && stage.spawn_marks[stage.spawn_idx].trigger_x <= cam_right
     {

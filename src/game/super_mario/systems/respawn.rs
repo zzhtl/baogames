@@ -1,11 +1,34 @@
 use bevy::prelude::*;
 
+use crate::common::settings::GameplayProfile;
 use crate::game::model::{GameSession, SaveData};
 
 use super::super::components::*;
 use super::super::constants::LEVEL_TIME;
 use super::super::resources::MarioStage;
 use super::super::setup_actors::build_player_visual;
+
+pub fn mario_checkpoint_update(
+    save: Res<SaveData>,
+    mut stage: ResMut<MarioStage>,
+    player_q: Query<(&MarioPlayer, &Transform)>,
+) {
+    if save.settings.gameplay_profile != GameplayProfile::Assist {
+        return;
+    }
+    let Ok((player, transform)) = player_q.single() else {
+        return;
+    };
+    let x = transform.translation.x;
+    if player.dead_timer <= 0.0
+        && !player.finished
+        && player.on_ground
+        && x >= stage.next_checkpoint_x
+    {
+        stage.player_spawn = transform.translation.truncate();
+        stage.next_checkpoint_x += 40.0 * super::super::constants::TILE;
+    }
+}
 
 pub fn mario_respawn(
     time: Res<Time>,
@@ -34,6 +57,7 @@ pub fn mario_respawn(
             tr.translation.y = stage.player_spawn.y;
             player.vel = Vec2::ZERO;
             player.on_ground = false;
+            player.coyote_ticks = 0;
             player.invincible = 1.6;
             player.dead_timer = 0.0;
             player.state = PowerState::Small;

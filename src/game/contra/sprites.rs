@@ -10,7 +10,7 @@ use crate::common::sprite_def::SpriteDef;
 use crate::parts;
 
 use super::constants::{
-    BOSS_H, BOSS_W, ENEMY_H, ENEMY_W, FALCON_H, FALCON_W, PLAYER_H, PLAYER_W,
+    BOSS_H, BOSS_W, ENEMY_H, ENEMY_W, FALCON_H, FALCON_W, PLAYER_H, PLAYER_W, PRONE_H,
 };
 use super::palette::*;
 
@@ -93,6 +93,73 @@ pub const PLAYER_BILL: SpriteDef = SpriteDef {
         (0.0, -7.0, 1.2, 8.4, COLOR_PLAYER_OUTLINE, 0.045), // 两腿间隙
         (-3.6, -15.1, 6.0, 1.0, COLOR_PLAYER_OUTLINE, 0.04), // 后靴底
         (3.6, -15.1, 6.0, 1.0, COLOR_PLAYER_OUTLINE, 0.04),  // 前靴底
+    ],
+};
+
+/// Bill 卧倒射击：身体贴地、双腿后伸，枪口仍保持清晰的朝右轮廓。
+pub const PLAYER_PRONE: SpriteDef = SpriteDef {
+    size: Vec2::new(PLAYER_W, PRONE_H),
+    parts: parts![
+        // 黑色底轮廓
+        (-7.0, -1.5, 13.0, 6.0, COLOR_PLAYER_OUTLINE, 0.04),
+        (0.0, 0.0, 14.0, 8.0, COLOR_PLAYER_OUTLINE, 0.04),
+        (6.0, 1.5, 8.0, 9.0, COLOR_PLAYER_OUTLINE, 0.04),
+        (14.0, 0.2, 17.0, 3.5, COLOR_PLAYER_OUTLINE, 0.04),
+        // 后伸的腿与战靴
+        (-11.0, -1.8, 7.0, 4.0, COLOR_PLAYER_BOOT, 0.06),
+        (-7.0, -0.8, 9.0, 5.0, COLOR_PLAYER_PANTS_DK, 0.061),
+        (-5.0, 0.2, 8.0, 4.0, COLOR_PLAYER_PANTS, 0.064),
+        (-6.0, 1.3, 5.0, 1.2, COLOR_PLAYER_PANTS_HI, 0.068),
+        // 贴地躯干
+        (-0.5, 0.5, 11.0, 7.0, COLOR_PLAYER_SKIN_SH, 0.06),
+        (-1.5, 1.7, 8.0, 4.5, COLOR_PLAYER_SKIN, 0.066),
+        (-3.0, 2.7, 4.0, 1.2, COLOR_PLAYER_SKIN_HI, 0.07),
+        (0.5, -1.8, 9.0, 1.2, COLOR_PLAYER_SKIN_DK, 0.07),
+        // 侧脸与头发
+        (5.0, 1.8, 7.0, 6.0, COLOR_PLAYER_SKIN, 0.067),
+        (3.8, 4.4, 7.0, 2.0, COLOR_PLAYER_HAIR, 0.074),
+        (2.0, 3.2, 2.0, 3.0, COLOR_PLAYER_HAIR, 0.074),
+        (7.8, 2.2, 1.3, 1.3, COLOR_PLAYER_OUTLINE, 0.082),
+        (7.8, 0.1, 3.0, 1.0, COLOR_PLAYER_SKIN_DK, 0.077),
+        // 前臂与水平步枪
+        (7.0, -1.0, 7.0, 3.0, COLOR_PLAYER_SKIN, 0.086),
+        (11.5, 0.2, 8.0, 2.6, COLOR_PLAYER_GUN, 0.096),
+        (12.0, 1.0, 7.0, 0.7, COLOR_PLAYER_GUN_HI, 0.101),
+        (18.0, 0.2, 8.0, 1.5, COLOR_PLAYER_GUN, 0.10),
+        (22.2, 0.2, 1.5, 1.2, COLOR_PLAYER_OUTLINE, 0.105),
+        (10.0, -0.8, 2.3, 2.3, COLOR_PLAYER_SKIN_HI, 0.108),
+    ],
+};
+
+/// Bill 跳跃翻滚：收腿成团的经典剪影，运行时旋转父节点形成翻滚动画。
+pub const PLAYER_FLIP: SpriteDef = SpriteDef {
+    size: Vec2::new(PLAYER_W, PLAYER_H),
+    parts: parts![
+        // 圆形黑色外轮廓
+        (0.0, 0.0, 18.0, 20.0, COLOR_PLAYER_OUTLINE, 0.04),
+        (-6.5, 0.0, 6.0, 13.0, COLOR_PLAYER_OUTLINE, 0.041),
+        (6.5, 0.0, 6.0, 13.0, COLOR_PLAYER_OUTLINE, 0.041),
+        // 蜷起的蓝裤与双腿
+        (-4.0, -4.0, 7.0, 9.0, COLOR_PLAYER_PANTS_DK, 0.06),
+        (2.0, -6.0, 9.0, 6.0, COLOR_PLAYER_PANTS, 0.064),
+        (4.0, -4.8, 4.0, 2.0, COLOR_PLAYER_PANTS_HI, 0.069),
+        (6.0, -1.0, 5.0, 5.0, COLOR_PLAYER_BOOT, 0.067),
+        (-6.0, -5.0, 5.0, 4.0, COLOR_PLAYER_BOOT, 0.067),
+        // 收紧的裸上身
+        (-2.0, 1.0, 11.0, 10.0, COLOR_PLAYER_SKIN_SH, 0.06),
+        (-3.0, 2.5, 7.0, 7.0, COLOR_PLAYER_SKIN, 0.066),
+        (-4.5, 4.0, 3.0, 4.0, COLOR_PLAYER_SKIN_HI, 0.071),
+        (0.5, 0.5, 2.0, 8.0, COLOR_PLAYER_SKIN_DK, 0.072),
+        // 侧脸和头发
+        (3.5, 5.0, 7.0, 6.0, COLOR_PLAYER_SKIN, 0.068),
+        (2.0, 8.0, 8.0, 2.5, COLOR_PLAYER_HAIR, 0.075),
+        (0.0, 6.5, 2.0, 4.0, COLOR_PLAYER_HAIR, 0.075),
+        (5.5, 5.8, 1.3, 1.3, COLOR_PLAYER_OUTLINE, 0.083),
+        // 抱枪的双臂与短枪形
+        (3.0, 0.5, 7.0, 3.0, COLOR_PLAYER_SKIN, 0.084),
+        (6.5, 1.0, 8.0, 2.5, COLOR_PLAYER_GUN, 0.096),
+        (8.0, 1.8, 6.0, 0.7, COLOR_PLAYER_GUN_HI, 0.101),
+        (10.8, 1.0, 2.0, 1.2, COLOR_PLAYER_OUTLINE, 0.105),
     ],
 };
 
@@ -244,6 +311,8 @@ mod tests {
     #[test]
     fn sprite_defs_are_well_formed() {
         PLAYER_BILL.check("PLAYER_BILL");
+        PLAYER_PRONE.check("PLAYER_PRONE");
+        PLAYER_FLIP.check("PLAYER_FLIP");
         ENEMY_SOLDIER.check("ENEMY_SOLDIER");
         ENEMY_SNIPER.check("ENEMY_SNIPER");
         ENEMY_JUMPER.check("ENEMY_JUMPER");
@@ -256,6 +325,8 @@ mod tests {
     #[test]
     fn player_envelope_matches_collision_constants() {
         assert_eq!(PLAYER_BILL.size, Vec2::new(PLAYER_W, PLAYER_H));
+        assert_eq!(PLAYER_PRONE.size, Vec2::new(PLAYER_W, PRONE_H));
+        assert_eq!(PLAYER_FLIP.size, Vec2::new(PLAYER_W, PLAYER_H));
         assert_eq!(ENEMY_SOLDIER.size, Vec2::new(ENEMY_W, ENEMY_H));
     }
 }

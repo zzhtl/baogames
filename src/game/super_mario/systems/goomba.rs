@@ -27,7 +27,7 @@ pub fn mario_goomba_ai(
         }
         if g.squashed > 0.0 {
             g.squashed -= dt;
-            tr.scale.y = (g.squashed / GOOMBA_SQUASH_TIME).max(0.1);
+            tr.scale.y = ACTOR_SCALE * (g.squashed / GOOMBA_SQUASH_TIME).max(0.1);
             if g.squashed <= 0.0 {
                 g.dead = true;
             }

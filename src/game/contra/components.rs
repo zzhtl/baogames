@@ -40,6 +40,10 @@ impl Weapon {
             Weapon::R => "R",
         }
     }
+
+    pub fn pierces_enemies(self) -> bool {
+        matches!(self, Weapon::F | Weapon::L)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -63,6 +67,13 @@ pub enum AimDir {
     Down,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ContraPlayerPose {
+    Stand,
+    Prone,
+    Flip,
+}
+
 impl AimDir {
     pub fn vec(self) -> Vec2 {
         let s = std::f32::consts::FRAC_1_SQRT_2;
@@ -83,6 +94,7 @@ impl AimDir {
 pub struct ContraPlayer {
     pub vel: Vec2,
     pub on_ground: bool,
+    pub coyote_ticks: u8,
     pub prone: bool,
     pub facing: f32,
     pub aim: AimDir,
@@ -91,6 +103,9 @@ pub struct ContraPlayer {
     pub dead_timer: f32,
     pub invincible: f32,
     pub finish: bool,
+    pub pose: ContraPlayerPose,
+    pub visual_t: f32,
+    pub landing_t: f32,
 }
 
 #[derive(Component)]
@@ -110,6 +125,8 @@ pub struct ContraEnemy {
     pub fire_cd: f32,
     pub ai_t: f32,
     pub hp: i32,
+    pub hit_t: f32,
+    pub recoil_t: f32,
 }
 
 #[derive(Component)]
@@ -142,9 +159,16 @@ pub struct ContraExplosion {
 }
 
 #[derive(Component)]
+pub struct ContraMuzzleFlash {
+    pub life: f32,
+    pub max_life: f32,
+}
+
+#[derive(Component)]
 pub struct ContraTurret {
     pub fire_cd: f32,
     pub hp: i32,
+    pub hit_t: f32,
 }
 
 #[derive(Component)]
@@ -154,6 +178,9 @@ pub struct ContraBoss {
     pub flash_t: f32,
     pub spawn_t: f32,
 }
+
+#[derive(Component)]
+pub struct ContraBossFlash;
 
 #[derive(Component, Clone, Copy)]
 pub struct ContraHud {
@@ -169,6 +196,7 @@ pub enum ContraHudKind {
     WeaponLetter,
     World,
     BossHp,
+    BossGauge(Option<u8>),
 }
 
 // 命数图标（顶部 HUD 上显示的小 Bill 头）
@@ -176,6 +204,7 @@ pub enum ContraHudKind {
 pub struct ContraHudLifeIcon {
     pub idx: i32,
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -218,5 +247,12 @@ mod tests {
         sorted.sort();
         sorted.dedup();
         assert_eq!(sorted.len(), 5);
+    }
+
+    #[test]
+    fn spread_shot_does_not_pierce_targets() {
+        assert!(!Weapon::S.pierces_enemies());
+        assert!(Weapon::F.pierces_enemies());
+        assert!(Weapon::L.pierces_enemies());
     }
 }

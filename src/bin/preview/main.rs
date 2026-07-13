@@ -55,7 +55,7 @@ fn main() {
         ["contra", "scene"] => render_contra_scene(),
         ["contra", name] => match contra_sprite(name) {
             Some(def) => render_sprite(&format!("contra_{name}"), def, scene_bg()),
-            None => eprintln!("未知 contra 精灵: {name}（player/soldier/sniper/jumper/heavy/gunner）"),
+            None => eprintln!("未知 contra 精灵: {name}（player/prone/flip/soldier/sniper/jumper/heavy/gunner）"),
         },
         ["tank", "all"] => render_all_tank(),
         ["tank", name] => match tank_sprite(name) {
@@ -90,6 +90,8 @@ fn main() {
 fn contra_sprite(name: &str) -> Option<&'static SpriteDef> {
     Some(match name {
         "player" | "bill" => &cs::PLAYER_BILL,
+        "prone" => &cs::PLAYER_PRONE,
+        "flip" => &cs::PLAYER_FLIP,
         "soldier" => &cs::ENEMY_SOLDIER,
         "sniper" => &cs::ENEMY_SNIPER,
         "jumper" => &cs::ENEMY_JUMPER,
@@ -228,7 +230,7 @@ fn scene_bg() -> Color {
 
 fn render_all_contra() {
     for name in [
-        "player", "soldier", "sniper", "jumper", "heavy", "gunner", "falcon", "boss",
+        "player", "prone", "flip", "soldier", "sniper", "jumper", "heavy", "gunner", "falcon", "boss",
     ] {
         if let Some(def) = contra_sprite(name) {
             render_sprite(&format!("contra_{name}"), def, scene_bg());

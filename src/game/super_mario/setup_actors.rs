@@ -12,10 +12,11 @@ pub fn spawn_player(commands: &mut Commands, pos: Vec2) {
     let player = commands
         .spawn((
             Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), size),
-            Transform::from_translation(pos.extend(Z_PLAYER)),
+            Transform::from_translation(pos.extend(Z_PLAYER)).with_scale(Vec3::splat(ACTOR_SCALE)),
             MarioPlayer {
                 vel: Vec2::ZERO,
                 on_ground: false,
+                coyote_ticks: 0,
                 jumping: false,
                 facing: Facing::Right,
                 invincible: 0.0,
@@ -38,14 +39,39 @@ pub fn build_player_visual(commands: &mut Commands, player: Entity, state: Power
         PowerState::Fire => big_mario_parts(true),
     };
     for (dx, dy, w, h, c) in parts {
+        let limb = mario_limb(state, dx, dy);
+        let base = Vec3::new(dx, dy, 0.05);
         commands
             .spawn((
                 Sprite::from_color(c, Vec2::new(w, h)),
-                Transform::from_translation(Vec3::new(dx, dy, 0.05)),
-                MarioVisual,
+                Transform::from_translation(base),
+                MarioVisual { base, limb },
                 GameEntity,
             ))
             .insert(ChildOf(player));
+    }
+}
+
+fn mario_limb(state: PowerState, x: f32, y: f32) -> MarioLimb {
+    let foot_y = if state == PowerState::Small { -7.0 } else { -8.0 };
+    if y <= foot_y {
+        if x < 0.0 {
+            MarioLimb::LeftFoot
+        } else {
+            MarioLimb::RightFoot
+        }
+    } else {
+        let hand = match state {
+            PowerState::Small => x.abs() >= 8.0 && (-2.0..=3.0).contains(&y),
+            PowerState::Big | PowerState::Fire => x.abs() >= 9.0 && (-2.0..=7.0).contains(&y),
+        };
+        if hand && x < 0.0 {
+            MarioLimb::LeftHand
+        } else if hand {
+            MarioLimb::RightHand
+        } else {
+            MarioLimb::Body
+        }
     }
 }
 
@@ -111,7 +137,7 @@ pub fn spawn_goomba(commands: &mut Commands, pos: Vec2) {
     let goomba = commands
         .spawn((
             Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::new(GOOMBA_W, GOOMBA_H)),
-            Transform::from_translation(pos.extend(Z_ENEMY)),
+            Transform::from_translation(pos.extend(Z_ENEMY)).with_scale(Vec3::splat(ACTOR_SCALE)),
             Goomba {
                 vel: Vec2::new(-GOOMBA_SPEED, 0.0),
                 on_ground: false,
@@ -158,7 +184,7 @@ pub fn spawn_koopa(commands: &mut Commands, pos: Vec2, kind: KoopaKind) {
     let entity = commands
         .spawn((
             Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::new(KOOPA_W, KOOPA_H)),
-            Transform::from_translation(pos.extend(Z_ENEMY)),
+            Transform::from_translation(pos.extend(Z_ENEMY)).with_scale(Vec3::splat(ACTOR_SCALE)),
             Koopa {
                 kind,
                 vel: Vec2::new(-KOOPA_SPEED, 0.0),
@@ -201,7 +227,7 @@ pub fn spawn_bowser(commands: &mut Commands, pos: Vec2) {
     let entity = commands
         .spawn((
             Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::new(BOWSER_W, BOWSER_H)),
-            Transform::from_translation(pos.extend(Z_ENEMY)),
+            Transform::from_translation(pos.extend(Z_ENEMY)).with_scale(Vec3::splat(ACTOR_SCALE)),
             Bowser {
                 vel: Vec2::new(-BOWSER_SPEED, 0.0),
                 on_ground: false,
@@ -248,7 +274,7 @@ pub fn spawn_axe(commands: &mut Commands, center: Vec2) {
     let entity = commands
         .spawn((
             Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(AXE_SIZE)),
-            Transform::from_translation(center.extend(Z_DECOR)),
+            Transform::from_translation(center.extend(Z_DECOR)).with_scale(Vec3::splat(ACTOR_SCALE)),
             Axe,
             GameEntity,
         ))
@@ -281,7 +307,8 @@ pub fn spawn_powerup(commands: &mut Commands, block_pos: Vec2, kind: PowerUpKind
     let entity = commands
         .spawn((
             Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.0), Vec2::splat(size)),
-            Transform::from_translation(Vec3::new(block_pos.x, block_pos.y, Z_POWERUP)),
+            Transform::from_translation(Vec3::new(block_pos.x, block_pos.y, Z_POWERUP))
+                .with_scale(Vec3::splat(ACTOR_SCALE)),
             PowerUp {
                 kind,
                 vel: Vec2::ZERO,

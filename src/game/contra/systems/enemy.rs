@@ -1,21 +1,22 @@
 use bevy::prelude::*;
 
-use crate::common::constants::ARENA_W;
+use crate::common::pixel_canvas::{InGameCamera, PixelCanvasConfig};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
 use super::super::constants::*;
-use super::super::geometry::aabb_overlap;
+use super::super::geometry::{aabb_overlap, quantize_direction_8};
 use super::super::setup_actors::spawn_enemy_bullet;
 
 pub fn contra_enemy_ai(
     time: Res<Time>,
     session: Res<GameSession>,
+    canvas: Res<PixelCanvasConfig>,
     mut commands: Commands,
     mut enemy_q: Query<(&mut ContraEnemy, &mut Transform), Without<ContraSolid>>,
     solid_q: Query<(&Transform, &ContraSolid), Without<ContraEnemy>>,
     player_q: Query<(&ContraPlayer, &Transform), Without<ContraEnemy>>,
-    cam_q: Query<&Transform, (With<Camera>, Without<ContraEnemy>)>,
+    cam_q: Query<&Transform, (With<InGameCamera>, Without<ContraEnemy>)>,
 ) {
     if session.paused || session.finished {
         return;
@@ -37,6 +38,8 @@ pub fn contra_enemy_ai(
     for (mut enemy, mut tr) in &mut enemy_q {
         let mut pos = tr.translation.truncate();
         enemy.ai_t += dt;
+        enemy.hit_t = (enemy.hit_t - dt).max(0.0);
+        enemy.recoil_t = (enemy.recoil_t - dt).max(0.0);
         match enemy.kind {
             EnemyKind::Soldier => {
                 if let Some(pp) = player_pos {
@@ -144,17 +147,17 @@ pub fn contra_enemy_ai(
         tr.translation.x = pos.x;
         tr.translation.y = pos.y;
         let s = if enemy.facing >= 0.0 { 1.0 } else { -1.0 };
-        tr.scale.x = s;
+        let hit_pulse = if enemy.hit_t > 0.0 { 0.10 } else { 0.0 };
+        let recoil = if enemy.recoil_t > 0.0 { 0.08 } else { 0.0 };
+        tr.scale = Vec3::new(s * (1.0 + hit_pulse), 1.0 - recoil, 1.0);
 
         enemy.fire_cd = (enemy.fire_cd - dt).max(0.0);
         if enemy.fire_cd <= 0.0 {
             if let Some(pp) = player_pos {
-                let mut dir = pp - pos;
-                if dir.x.abs() < 4.0 {
-                    dir.x = enemy.facing * 1.0;
-                }
-                if (pos.x - cam_x).abs() < ARENA_W * 0.55 {
+                let dir = quantize_direction_8(pp - pos);
+                if (pos.x - cam_x).abs() < canvas.display_mode.world_width() * 0.55 {
                     spawn_enemy_bullet(&mut commands, pos, dir);
+                    enemy.recoil_t = 0.09;
                     enemy.fire_cd = match enemy.kind {
                         EnemyKind::Sniper => SNIPER_FIRE_CD,
                         EnemyKind::Gunner => GUNNER_FIRE_CD,

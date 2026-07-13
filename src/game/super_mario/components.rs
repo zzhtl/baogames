@@ -28,6 +28,7 @@ impl PowerState {
 pub struct MarioPlayer {
     pub vel: Vec2,
     pub on_ground: bool,
+    pub coyote_ticks: u8,
     pub jumping: bool,
     pub facing: Facing,
     pub invincible: f32,
@@ -38,8 +39,20 @@ pub struct MarioPlayer {
     pub fire_cd: f32,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum MarioLimb {
+    Body,
+    LeftFoot,
+    RightFoot,
+    LeftHand,
+    RightHand,
+}
+
 #[derive(Component)]
-pub struct MarioVisual;
+pub struct MarioVisual {
+    pub base: Vec3,
+    pub limb: MarioLimb,
+}
 
 #[derive(Component)]
 pub struct MarioBackground;

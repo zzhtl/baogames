@@ -10,7 +10,7 @@ use super::constants::*;
 use super::geometry::tile_center;
 use super::levels::{build_level_1_1, build_level_1_2, build_level_1_3, build_level_1_4};
 use super::palette::*;
-use super::resources::MarioStage;
+use super::resources::{MarioControls, MarioStage};
 use super::setup_actors::{
     spawn_axe, spawn_bowser, spawn_goomba, spawn_koopa, spawn_player,
 };
@@ -21,6 +21,7 @@ use super::setup_terrain::{
 };
 
 pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
+    commands.insert_resource(MarioControls::default());
     let bg_color = match level {
         2 => Color::srgb(0.02, 0.02, 0.03),
         3 => Color::srgb(0.13, 0.20, 0.42),
@@ -131,21 +132,22 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, lev
         level,
         finish_timer: 0.0,
         player_spawn,
+        next_checkpoint_x: 40.0 * TILE,
     });
 }
 
 fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
-    let y = ARENA_H * 0.5 - 24.0;
+    let y = ARENA_H * 0.5 - 18.0;
     let label_color = Color::srgb(0.95, 0.95, 0.95);
     let value_color = Color::WHITE;
 
     // 标签 + 数值五列：分数 / 金币 / 世界 / 时间 / 生命
     let columns: [(&str, f32, &str, HudKind); 5] = [
-        ("分数", -ARENA_W * 0.5 + 70.0, "000000", HudKind::Score),
-        ("金币", -100.0, "x00", HudKind::Coins),
-        ("世界", 120.0, "1-1", HudKind::World),
-        ("时间", ARENA_W * 0.5 - 190.0, "300", HudKind::Time),
-        ("生命", ARENA_W * 0.5 - 80.0, "x3", HudKind::Lives),
+        ("分数", -285.0, "000000", HudKind::Score),
+        ("金币", -145.0, "x00", HudKind::Coins),
+        ("世界", 0.0, "1-1", HudKind::World),
+        ("时间", 145.0, "300", HudKind::Time),
+        ("生命", 285.0, "x3", HudKind::Lives),
     ];
     for (label, x, value, kind) in columns {
         hud_text(
@@ -163,7 +165,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
             font,
             hud_root,
             value,
-            Vec2::new(x, y - 22.0),
+            Vec2::new(x, y - 30.0),
             FONT_HEADING,
             value_color,
             MarioHud { kind },

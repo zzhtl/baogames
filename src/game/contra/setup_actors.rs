@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::common::render::{UiFont, spawn_sprite_def};
+use crate::common::render::{UiFont, attach_sprite_parts, spawn_sprite_def};
 use crate::game::model::GameEntity;
 
 use super::components::*;
@@ -9,7 +9,7 @@ use super::palette::*;
 use super::resources::*;
 use super::sprites::{
     BOSS_BODY, ENEMY_GUNNER, ENEMY_HEAVY, ENEMY_JUMPER, ENEMY_SNIPER, ENEMY_SOLDIER, FALCON,
-    PLAYER_BILL,
+    PLAYER_BILL, PLAYER_FLIP, PLAYER_PRONE,
 };
 
 pub fn spawn_player(commands: &mut Commands, pos: Vec2) {
@@ -24,6 +24,7 @@ pub fn spawn_player(commands: &mut Commands, pos: Vec2) {
             ContraPlayer {
                 vel: Vec2::ZERO,
                 on_ground: false,
+                coyote_ticks: 0,
                 prone: false,
                 facing: 1.0,
                 aim: AimDir::Right,
@@ -32,10 +33,27 @@ pub fn spawn_player(commands: &mut Commands, pos: Vec2) {
                 dead_timer: 0.0,
                 invincible: 1.0,
                 finish: false,
+                pose: ContraPlayerPose::Stand,
+                visual_t: 0.0,
+                landing_t: 0.0,
             },
             GameEntity,
         ),
     );
+}
+
+pub fn rebuild_player_visual(
+    commands: &mut Commands,
+    player: Entity,
+    pose: ContraPlayerPose,
+) {
+    commands.entity(player).despawn_related::<Children>();
+    let def = match pose {
+        ContraPlayerPose::Stand => &PLAYER_BILL,
+        ContraPlayerPose::Prone => &PLAYER_PRONE,
+        ContraPlayerPose::Flip => &PLAYER_FLIP,
+    };
+    attach_sprite_parts(commands, player, def, GameEntity);
 }
 
 pub fn spawn_enemy(commands: &mut Commands, mark: &EnemySpawnMark) {
@@ -76,6 +94,8 @@ pub fn spawn_enemy(commands: &mut Commands, mark: &EnemySpawnMark) {
                 },
                 ai_t: 0.0,
                 hp,
+                hit_t: 0.0,
+                recoil_t: 0.0,
             },
             GameEntity,
         ),
@@ -153,6 +173,20 @@ pub fn spawn_explosion(commands: &mut Commands, pos: Vec2, size: f32, life: f32)
     ));
 }
 
+pub fn spawn_muzzle_flash(commands: &mut Commands, pos: Vec2, dir: Vec2) {
+    let max_life = 0.055;
+    commands.spawn((
+        Sprite::from_color(COLOR_EXPL_HOT, Vec2::new(13.0, 4.0)),
+        Transform::from_translation(pos.extend(Z_EXPL))
+            .with_rotation(Quat::from_rotation_z(dir.y.atan2(dir.x))),
+        ContraMuzzleFlash {
+            life: max_life,
+            max_life,
+        },
+        GameEntity,
+    ));
+}
+
 pub fn spawn_player_bullet(commands: &mut Commands, pos: Vec2, dir: Vec2, weapon: Weapon) {
     let (size, color, speed, life) = match weapon {
         Weapon::F => (FLAME_SIZE, COLOR_FLAME_CORE, FLAME_SPEED, BULLET_LIFE * 0.8),
@@ -195,7 +229,7 @@ pub fn spawn_enemy_bullet(commands: &mut Commands, pos: Vec2, dir: Vec2) {
 pub fn spawn_boss(commands: &mut Commands, x: f32, hp: i32) {
     let center_y = GROUND_TOP + BOSS_H * 0.5;
     // 要塞主体见 sprites::BOSS_BODY（机械装甲墙 + 中央能量核弱点）。
-    spawn_sprite_def(
+    let boss = spawn_sprite_def(
         commands,
         &BOSS_BODY,
         Vec2::new(x, center_y),
@@ -211,21 +245,34 @@ pub fn spawn_boss(commands: &mut Commands, x: f32, hp: i32) {
             GameEntity,
         ),
     );
+    commands
+        .spawn((
+            Sprite::from_color(Color::srgba(1.0, 1.0, 1.0, 0.0), Vec2::splat(48.0)),
+            Transform::from_translation(Vec3::new(0.0, 0.0, 0.18)),
+            ContraBossFlash,
+            GameEntity,
+        ))
+        .insert(ChildOf(boss));
     let turret_offsets = [80.0_f32, -80.0];
     for dy in turret_offsets {
-        commands.spawn((
-            Sprite::from_color(COLOR_TURRET, Vec2::new(TURRET_W, TURRET_H)),
-            Transform::from_translation(Vec3::new(x - 24.0, center_y + dy, Z_BOSS + 0.3)),
-            ContraTurret {
-                fire_cd: 0.8,
-                hp: TURRET_HP,
-            },
-            GameEntity,
-        ));
-        commands.spawn((
-            Sprite::from_color(COLOR_TURRET_BARREL, Vec2::new(20.0, 8.0)),
-            Transform::from_translation(Vec3::new(x - 56.0, center_y + dy, Z_BOSS + 0.32)),
-            GameEntity,
-        ));
+        let turret = commands
+            .spawn((
+                Sprite::from_color(COLOR_TURRET, Vec2::new(TURRET_W, TURRET_H)),
+                Transform::from_translation(Vec3::new(x - 24.0, center_y + dy, Z_BOSS + 0.3)),
+                ContraTurret {
+                    fire_cd: 0.8,
+                    hp: TURRET_HP,
+                    hit_t: 0.0,
+                },
+                GameEntity,
+            ))
+            .id();
+        commands
+            .spawn((
+                Sprite::from_color(COLOR_TURRET_BARREL, Vec2::new(20.0, 8.0)),
+                Transform::from_translation(Vec3::new(-32.0, 0.0, 0.02)),
+                GameEntity,
+            ))
+            .insert(ChildOf(turret));
     }
 }

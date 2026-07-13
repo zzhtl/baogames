@@ -24,6 +24,8 @@ pub fn contra_physics(
     if player.invincible > 0.0 {
         player.invincible = (player.invincible - dt).max(0.0);
     }
+    player.visual_t += dt;
+    player.landing_t = (player.landing_t - dt).max(0.0);
 
     if player.dead_timer > 0.0 {
         player.vel.y -= GRAVITY * dt;
@@ -33,8 +35,10 @@ pub fn contra_physics(
         return;
     }
 
+    let was_on_ground = player.on_ground;
     player.vel.y -= GRAVITY * dt;
     player.vel.y = player.vel.y.max(-FALL_MAX);
+    let fall_speed = (-player.vel.y).max(0.0);
 
     let mut pos = tr.translation.truncate();
     let p_size = player_size(player.prone);
@@ -95,6 +99,9 @@ pub fn contra_physics(
         }
     }
     player.on_ground = on_ground;
+    if !was_on_ground && on_ground && fall_speed > 180.0 {
+        player.landing_t = 0.11;
+    }
 
     tr.translation.x = pos.x;
     tr.translation.y = pos.y;
@@ -102,6 +109,8 @@ pub fn contra_physics(
     if pos.y < FALL_DEATH_Y && player.dead_timer <= 0.0 {
         player.dead_timer = RESPAWN_TIME;
         player.vel = Vec2::new(0.0, 0.0);
+        player.on_ground = false;
+        player.coyote_ticks = 0;
         session.lives -= 1;
     }
 }

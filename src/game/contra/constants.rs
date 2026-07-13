@@ -44,11 +44,13 @@ pub const PICKUP_FALL_SPEED: f32 = 110.0;
 
 pub const BOSS_W: f32 = 220.0;
 pub const BOSS_H: f32 = 240.0;
+pub const BOSS_CORE_SIZE: f32 = 60.0;
 pub const BOSS_HP: i32 = 30;
 pub const TURRET_W: f32 = 42.0;
 pub const TURRET_H: f32 = 26.0;
 pub const TURRET_FIRE_CD: f32 = 1.5;
 pub const TURRET_HP: i32 = 6;
+pub const BOSS_GAUGE_SEGMENTS: u8 = 12;
 
 pub const CAMERA_FOLLOW_OFFSET: f32 = 60.0;
 pub const FALL_DEATH_Y: f32 = -ARENA_H * 0.5 - 40.0;

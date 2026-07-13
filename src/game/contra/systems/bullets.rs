@@ -6,12 +6,14 @@ use crate::game::model::GameSession;
 
 use super::super::components::*;
 use super::super::constants::*;
-use super::super::geometry::{aabb_overlap, player_size};
+use super::super::geometry::{aabb_overlap, boss_core_overlap, player_size};
 use super::super::setup_actors::{spawn_explosion, spawn_pickup};
 
 pub fn kill_player(player: &mut ContraPlayer, pos: Vec2, commands: &mut Commands) {
     player.dead_timer = RESPAWN_TIME;
     player.vel = Vec2::new(0.0, 320.0);
+    player.on_ground = false;
+    player.coyote_ticks = 0;
     spawn_explosion(commands, pos, 32.0, 0.45);
 }
 
@@ -106,18 +108,22 @@ pub fn contra_bullets_update(
             for (ee, mut enemy, etr) in &mut enemy_q {
                 if aabb_overlap(bp, bs, etr.translation.truncate(), Vec2::new(ENEMY_W, ENEMY_H)) {
                     enemy.hp -= 1;
+                    enemy.hit_t = 0.10;
+                    spawn_explosion(&mut commands, bp, 10.0, 0.12);
                     if enemy.hp <= 0 {
                         spawn_explosion(&mut commands, etr.translation.truncate(), 26.0, 0.32);
                         sfx.write(PlaySfx(SfxKind::Explosion));
                         commands.entity(ee).despawn();
                         score_gain += 100;
+                    } else {
+                        sfx.write(PlaySfx(SfxKind::Hit));
                     }
                     hit_enemy = true;
                     break;
                 }
             }
             if hit_enemy {
-                if !matches!(bullet.weapon, Weapon::F | Weapon::S | Weapon::L) {
+                if !bullet.weapon.pierces_enemies() {
                     commands.entity(be).despawn();
                 }
                 continue;
@@ -131,11 +137,15 @@ pub fn contra_bullets_update(
                     Vec2::new(TURRET_W, TURRET_H),
                 ) {
                     turret.hp -= 1;
+                    turret.hit_t = 0.10;
+                    spawn_explosion(&mut commands, bp, 11.0, 0.12);
                     if turret.hp <= 0 {
                         spawn_explosion(&mut commands, ttr.translation.truncate(), 36.0, 0.5);
                         sfx.write(PlaySfx(SfxKind::Explosion));
                         commands.entity(te).despawn();
                         score_gain += 500;
+                    } else {
+                        sfx.write(PlaySfx(SfxKind::Hit));
                     }
                     hit_t = true;
                     break;
@@ -149,16 +159,18 @@ pub fn contra_bullets_update(
             }
             let mut hit_boss = false;
             for (_be2, mut boss, btr2) in &mut boss_q {
-                if boss.die_t > 0.0 {
-                    continue;
-                }
                 let bpos = btr2.translation.truncate();
                 if aabb_overlap(bp, bs, bpos, Vec2::new(BOSS_W, BOSS_H)) {
-                    boss.hp -= 1;
-                    boss.flash_t = 0.12;
-                    score_gain += 50;
-                    if boss.hp <= 0 {
-                        boss.die_t = 1.4;
+                    if boss.die_t <= 0.0 && boss_core_overlap(bp, bs, bpos) {
+                        boss.hp -= 1;
+                        boss.flash_t = 0.12;
+                        score_gain += 50;
+                        sfx.write(PlaySfx(SfxKind::Hit));
+                        if boss.hp <= 0 {
+                            boss.die_t = 1.4;
+                        }
+                    } else if boss.die_t <= 0.0 {
+                        sfx.write(PlaySfx(SfxKind::Deny));
                     }
                     hit_boss = true;
                     spawn_explosion(&mut commands, bp, 14.0, 0.18);
@@ -166,9 +178,7 @@ pub fn contra_bullets_update(
                 }
             }
             if hit_boss {
-                if !matches!(bullet.weapon, Weapon::F) {
-                    commands.entity(be).despawn();
-                }
+                commands.entity(be).despawn();
                 continue;
             }
             let mut hit_f = false;

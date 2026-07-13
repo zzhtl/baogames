@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::common::constants::{ARENA_H, ARENA_W};
+use crate::common::constants::ARENA_H;
 use crate::common::render::UiFont;
 use crate::game::hud::hud_text;
 use crate::game::model::GameEntity;
@@ -21,6 +21,7 @@ pub fn setup_stage(
     level: u8,
     top_score: u32,
 ) {
+    commands.insert_resource(ContraControls::default());
     spawn_background(commands, stage_sky(level));
     spawn_decor(commands);
 
@@ -208,17 +209,18 @@ fn build_enemy_marks_l1() -> Vec<EnemySpawnMark> {
 }
 
 fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8, top_score: u32) {
-    let top_y = ARENA_H * 0.5 - 14.0;
+    let top_y = ARENA_H * 0.5 - 18.0;
+    let hud_width = 720.0;
     // 顶部黑色通栏 + 分隔线
     commands.spawn((
-        Sprite::from_color(Color::srgb(0.0, 0.0, 0.0), Vec2::new(ARENA_W, 28.0)),
+        Sprite::from_color(Color::srgb(0.0, 0.0, 0.0), Vec2::new(hud_width, 36.0)),
         Transform::from_translation(Vec3::new(0.0, top_y, 0.0)),
         GameEntity,
         ChildOf(hud_root),
     ));
     commands.spawn((
-        Sprite::from_color(Color::srgb(0.85, 0.85, 0.85), Vec2::new(ARENA_W, 1.0)),
-        Transform::from_translation(Vec3::new(0.0, top_y - 14.0, 0.05)),
+        Sprite::from_color(Color::srgb(0.85, 0.85, 0.85), Vec2::new(hud_width, 1.0)),
+        Transform::from_translation(Vec3::new(0.0, top_y - 18.0, 0.05)),
         GameEntity,
         ChildOf(hud_root),
     ));
@@ -227,36 +229,36 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
     let texts: [(&str, Vec2, f32, Color, ContraHudKind); 5] = [
         (
             "TOP-000000",
-            Vec2::new(-ARENA_W * 0.5 + 96.0, top_y),
-            14.0,
+            Vec2::new(-285.0, top_y),
+            18.0,
             Color::srgb(1.0, 1.0, 1.0),
             ContraHudKind::TopScore,
         ),
         (
             "1P-000000",
-            Vec2::new(-ARENA_W * 0.5 + 232.0, top_y),
-            14.0,
+            Vec2::new(-155.0, top_y),
+            18.0,
             Color::srgb(1.0, 0.95, 0.30),
             ContraHudKind::Score,
         ),
         (
             "STAGE 1-1",
             Vec2::new(0.0, top_y),
-            14.0,
+            18.0,
             Color::srgb(1.0, 1.0, 1.0),
             ContraHudKind::World,
         ),
         (
             "x3",
             Vec2::new(110.0, top_y),
-            14.0,
+            18.0,
             Color::srgb(1.0, 1.0, 1.0),
             ContraHudKind::Lives,
         ),
         (
             "",
-            Vec2::new(ARENA_W * 0.5 - 30.0, top_y),
-            12.0,
+            Vec2::new(-58.0, top_y - 29.0),
+            14.0,
             Color::srgb(1.0, 0.4, 0.32),
             ContraHudKind::BossHp,
         ),
@@ -266,13 +268,41 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
     }
     let _ = (level, top_score);
 
+    let gauge_y = top_y - 29.0;
+    commands.spawn((
+        Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.88), Vec2::new(172.0, 16.0)),
+        Transform::from_translation(Vec3::new(15.0, gauge_y, 0.09)),
+        Visibility::Hidden,
+        ContraHud {
+            kind: ContraHudKind::BossGauge(None),
+        },
+        GameEntity,
+        ChildOf(hud_root),
+    ));
+    for segment in 0..BOSS_GAUGE_SEGMENTS {
+        commands.spawn((
+            Sprite::from_color(COLOR_BOSS_CORE, Vec2::new(7.0, 6.0)),
+            Transform::from_translation(Vec3::new(
+                -25.0 + segment as f32 * 9.0,
+                gauge_y,
+                0.11,
+            )),
+            Visibility::Hidden,
+            ContraHud {
+                kind: ContraHudKind::BossGauge(Some(segment)),
+            },
+            GameEntity,
+            ChildOf(hud_root),
+        ));
+    }
+
     for i in 0..4 {
         let icon_off = Vec2::new(140.0 + i as f32 * 14.0, top_y);
         spawn_life_icon(commands, hud_root, icon_off, 0.2, i);
     }
 
     // 当前武器指示：白色底框 + 武器色块 + 字母
-    let weapon_off = Vec2::new(ARENA_W * 0.5 - 80.0, top_y);
+    let weapon_off = Vec2::new(280.0, top_y);
     commands.spawn((
         Sprite::from_color(Color::srgb(1.0, 1.0, 1.0), Vec2::new(20.0, 20.0)),
         Transform::from_translation(weapon_off.extend(0.1)),
@@ -294,7 +324,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
         hud_root,
         "M",
         weapon_off,
-        14.0,
+        18.0,
         Color::srgb(0.0, 0.0, 0.0),
         ContraHud {
             kind: ContraHudKind::WeaponLetter,
