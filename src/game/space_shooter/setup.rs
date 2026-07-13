@@ -10,13 +10,14 @@ use crate::game::model::{Collider, GameEntity, Lifetime};
 
 use super::components::*;
 use super::constants::*;
-use super::resources::SpaceState;
+use super::resources::{SpaceControls, SpaceState};
 use super::sprites::{
     ENEMY_BOMBER, ENEMY_BOSS, ENEMY_CARRIER, ENEMY_SCOUT, ENEMY_SNIPER, POWERUP_P, SHIP_PLAYER,
 };
 use super::waves::build_wave;
 
 pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
+    commands.insert_resource(SpaceControls::default());
     paint_background(commands);
     spawn_starfield(commands);
     paint_frame(commands);
@@ -25,6 +26,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, lev
 
     commands.insert_resource(SpaceState {
         power: 1,
+        rolls: 3,
         wave_idx: 0,
         wave_clock: 0.0,
         pending: build_wave(0, level),
@@ -133,8 +135,8 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
     hud_panel(
         commands,
         hud_root,
-        Vec2::new(hud_x, 180.0),
-        Vec2::new(180.0, 230.0),
+        Vec2::new(hud_x, 145.0),
+        Vec2::new(180.0, 300.0),
         Color::srgb(0.06, 0.08, 0.14),
         Color::srgb(0.36, 0.48, 0.78),
     );
@@ -143,7 +145,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
         font,
         hud_root,
         "太空射击",
-        Vec2::new(hud_x, 270.0),
+        Vec2::new(hud_x, 244.0),
         FONT_HEADING,
         Color::srgb(0.78, 0.92, 1.0),
         (),
@@ -152,8 +154,8 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
         commands,
         font,
         hud_root,
-        "P1\nWASD 移动\nJ / 空格 射击\nEsc 暂停",
-        Vec2::new(hud_x, 195.0),
+        "P1\n方向移动\n动作一射击 · 动作二翻滚\n开始键暂停",
+        Vec2::new(hud_x, 185.0),
         FONT_SMALL,
         Color::srgb(0.7, 0.84, 1.0),
         (),
@@ -164,7 +166,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
         font,
         hud_root,
         "",
-        Vec2::new(hud_x, 110.0),
+        Vec2::new(hud_x, 80.0),
         16.0,
         Color::srgb(1.0, 0.94, 0.7),
         SpaceHud,
@@ -203,6 +205,9 @@ pub fn spawn_player_ship(commands: &mut Commands, pos: Vec2) {
                 fire_cd_left: 0.0,
                 invincible_left: PLAYER_INVINCIBLE,
                 blink_phase: 0.0,
+                roll_left: 0.0,
+                recoil_left: 0.0,
+                move_dir: Vec2::ZERO,
             },
             Collider {
                 size: Vec2::new(14.0, 22.0),
@@ -210,6 +215,13 @@ pub fn spawn_player_ship(commands: &mut Commands, pos: Vec2) {
         ))
         .id();
     attach_sprite_parts(commands, parent, &SHIP_PLAYER, GameEntity);
+    commands.spawn((
+        Sprite::from_color(Color::srgb(0.35, 0.85, 1.0), Vec2::new(6.0, 11.0)),
+        Transform::from_translation(Vec3::new(0.0, -19.0, -0.05)),
+        SpaceEngineFlame,
+        ChildOf(parent),
+        GameEntity,
+    ));
 }
 
 pub fn spawn_enemy(
@@ -231,6 +243,7 @@ pub fn spawn_enemy(
                 time_alive: 0.0,
                 spawn_x: pos.x,
                 drops_power,
+                hit_flash_left: 0.0,
             },
             Collider { size: kind.collider() },
         ))
@@ -263,6 +276,16 @@ pub fn spawn_bullet(
     ));
 }
 
+pub fn spawn_muzzle_flash(commands: &mut Commands, pos: Vec2) {
+    commands.spawn((
+        Sprite::from_color(Color::srgb(1.0, 0.95, 0.55), Vec2::new(12.0, 18.0)),
+        Transform::from_translation(pos.extend(Z_PARTICLE)),
+        GameEntity,
+        SpaceMuzzleFlash,
+        Lifetime(Timer::new(Duration::from_millis(70), TimerMode::Once)),
+    ));
+}
+
 pub fn spawn_powerup(commands: &mut Commands, pos: Vec2) {
     let parent = commands
         .spawn((
@@ -288,6 +311,7 @@ pub fn spawn_explosion(commands: &mut Commands, pos: Vec2, big: bool) {
         Sprite::from_color(base_color, Vec2::splat(if big { 60.0 } else { 28.0 })),
         Transform::from_translation(pos.extend(Z_PARTICLE)),
         GameEntity,
+        SpaceExplosionParticle { grows: true },
         Lifetime(Timer::new(Duration::from_millis(180), TimerMode::Once)),
     ));
     for _ in 0..count {
@@ -310,10 +334,24 @@ pub fn spawn_explosion(commands: &mut Commands, pos: Vec2, big: bool) {
             ),
             Transform::from_translation((pos + off).extend(Z_PARTICLE)),
             GameEntity,
+            SpaceExplosionParticle { grows: false },
             Lifetime(Timer::new(
                 Duration::from_millis(rng.gen_range(180..360)),
                 TimerMode::Once,
             )),
+        ));
+    }
+}
+
+pub fn spawn_hit_spark(commands: &mut Commands, pos: Vec2) {
+    for rotation in [0.0, std::f32::consts::FRAC_PI_2] {
+        commands.spawn((
+            Sprite::from_color(Color::srgb(1.0, 0.95, 0.65), Vec2::new(16.0, 3.0)),
+            Transform::from_translation(pos.extend(Z_PARTICLE))
+                .with_rotation(Quat::from_rotation_z(rotation)),
+            GameEntity,
+            SpaceExplosionParticle { grows: false },
+            Lifetime(Timer::new(Duration::from_millis(90), TimerMode::Once)),
         ));
     }
 }

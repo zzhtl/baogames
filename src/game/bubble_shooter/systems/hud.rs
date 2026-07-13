@@ -34,11 +34,12 @@ pub fn bubble_hud_update(
         set_text(
             &mut t,
             &format!(
-                "分数 {}\n纪录 {}\n第 {} 关\n剩余 {} 颗\n{} 步后下移",
+                "分数 {}\n纪录 {}\n第 {} 关\n剩余 {} 颗\n连消 x{}\n{} 步后下移",
                 session.score,
                 high,
                 session.level,
                 left,
+                stage.combo_streak,
                 stage.shots_left_for_descend.max(0),
             ),
         );

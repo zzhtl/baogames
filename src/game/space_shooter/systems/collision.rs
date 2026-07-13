@@ -7,7 +7,7 @@ use super::super::components::*;
 use super::super::constants::{PLAYER_INVINCIBLE, PLAYER_RESPAWN_X, PLAYER_RESPAWN_Y};
 use super::super::geometry::aabb;
 use super::super::resources::SpaceState;
-use super::super::setup::{spawn_explosion, spawn_powerup};
+use super::super::setup::{spawn_explosion, spawn_hit_spark, spawn_powerup};
 
 #[allow(clippy::too_many_arguments)]
 pub fn space_collisions(
@@ -48,6 +48,7 @@ pub fn space_collisions(
                     ec.size,
                 ) {
                     enemy.hp -= b.damage;
+                    enemy.hit_flash_left = 0.1;
                     commands.entity(be).despawn();
                     if enemy.hp <= 0 {
                         session.score += enemy.points;
@@ -71,6 +72,9 @@ pub fn space_collisions(
                             }
                         }
                         commands.entity(ee).despawn();
+                    } else {
+                        spawn_hit_spark(&mut commands, bt.translation.truncate());
+                        sfx.write(PlaySfx(SfxKind::Hit));
                     }
                     break;
                 }

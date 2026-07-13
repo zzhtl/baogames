@@ -3,6 +3,45 @@ use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
+use crate::common::input::ActionState;
+use crate::common::settings::{InputAction, PlayerSlot};
+
+#[derive(Resource, Default)]
+pub struct BubbleControls {
+    aim_axis: f32,
+    fire_buffer_ticks: u8,
+}
+
+impl BubbleControls {
+    pub fn sample(&mut self, actions: &ActionState) {
+        self.aim_axis = actions.movement(PlayerSlot::One).x;
+        if actions.just_pressed(PlayerSlot::One, InputAction::Primary) {
+            self.fire_buffer_ticks = 8;
+        }
+    }
+
+    pub fn aim_axis(&self) -> f32 {
+        self.aim_axis
+    }
+
+    pub fn take_fire(&mut self, ready: bool) -> bool {
+        if self.fire_buffer_ticks == 0 {
+            return false;
+        }
+        if ready {
+            self.fire_buffer_ticks = 0;
+            true
+        } else {
+            self.fire_buffer_ticks -= 1;
+            false
+        }
+    }
+
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+}
+
 #[derive(Resource)]
 pub struct BubbleStage {
     pub grid: Vec<Vec<Option<u8>>>,
@@ -18,6 +57,8 @@ pub struct BubbleStage {
     pub message: String,
     pub message_clock: f32,
     pub flash_clock: f32,
+    pub recoil_clock: f32,
+    pub combo_streak: u8,
 }
 
 /// 圆形泡泡的预绘制贴图：球体 + 高光。颜色通过 `Sprite.color` 染色。
@@ -115,4 +156,20 @@ fn build_highlight_image() -> Image {
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::default(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BubbleControls;
+
+    #[test]
+    fn fire_buffer_waits_for_cannon_and_fires_once() {
+        let mut controls = BubbleControls {
+            fire_buffer_ticks: 2,
+            ..Default::default()
+        };
+        assert!(!controls.take_fire(false));
+        assert!(controls.take_fire(true));
+        assert!(!controls.take_fire(true));
+    }
 }

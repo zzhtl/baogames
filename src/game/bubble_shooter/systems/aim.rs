@@ -2,15 +2,24 @@ use bevy::prelude::*;
 
 use crate::game::model::{GameKind, GameSession};
 
-use super::super::components::AimDot;
+use super::super::components::{AimDot, AimLanding, BubbleColor, palette};
 use super::super::constants::*;
-use super::super::grid::{aim_dir, cell_to_pos, cell_valid};
+use super::super::grid::{aim_dir, cell_to_pos, cell_valid, snap_nearest_empty};
 use super::super::resources::BubbleStage;
 
+type LandingQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Sprite, &'static mut BubbleColor),
+    (With<AimLanding>, Without<AimDot>),
+>;
+
 pub fn bubble_aim_dots_update(
+    time: Res<Time>,
     session: Res<GameSession>,
     stage: Res<BubbleStage>,
-    mut dots: Query<(&AimDot, &mut Transform, &mut Sprite)>,
+    mut dots: Query<(&AimDot, &mut Transform, &mut Sprite), Without<AimLanding>>,
+    mut landing: LandingQuery,
 ) {
     if session.kind != GameKind::BubbleBobble {
         return;
@@ -21,7 +30,10 @@ pub fn bubble_aim_dots_update(
     let mut p = start;
     let mut v = dir;
     let step = 22.0;
-    for i in 0..7 {
+    if let Ok((_transform, mut sprite, _color)) = landing.single_mut() {
+        sprite.color.set_alpha(0.0);
+    }
+    for i in 0..160 {
         // 简单步进 + 墙反射；遇到泡泡或顶部停在那个位置
         let mut traveled = 0.0;
         let segment = step;
@@ -77,16 +89,20 @@ pub fn bubble_aim_dots_update(
                 }
             }
         }
-        for (dot, mut t, mut sp) in &mut dots {
-            if dot.idx == i {
+        if i < AIM_DOT_COUNT {
+            for (dot, mut t, mut sp) in &mut dots {
+                if dot.idx != i {
+                    continue;
+                }
                 t.translation.x = p.x;
                 t.translation.y = p.y;
                 sp.color = if visible {
-                    let alpha = if hit { 0.3 } else { 0.85 - i as f32 * 0.07 };
-                    Color::srgba(0.55, 0.32, 0.72, alpha)
+                    let alpha = if hit { 0.35 } else { 0.84 - i as f32 * 0.045 };
+                    palette(stage.current).with_alpha(alpha)
                 } else {
                     Color::srgba(0.0, 0.0, 0.0, 0.0)
                 };
+                sp.custom_size = Some(Vec2::splat(if hit { 9.0 } else { 5.0 }));
             }
         }
         if hit {
@@ -96,6 +112,18 @@ pub fn bubble_aim_dots_update(
                     t.translation.y = p.y;
                     sp.color = Color::srgba(0.0, 0.0, 0.0, 0.0);
                 }
+            }
+            if visible
+                && let Some((col, row)) = snap_nearest_empty(p, stage.descend, &stage.grid)
+                && let Ok((mut transform, mut sprite, mut color)) = landing.single_mut()
+            {
+                let target = cell_to_pos(col, row, stage.descend);
+                transform.translation.x = target.x;
+                transform.translation.y = target.y;
+                let pulse = 0.92 + (time.elapsed_secs() * 7.0).sin() * 0.06;
+                transform.scale = Vec3::new(pulse, pulse, 1.0);
+                color.0 = stage.current;
+                sprite.color = palette(stage.current).with_alpha(0.32);
             }
             return;
         }

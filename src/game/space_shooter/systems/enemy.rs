@@ -42,11 +42,12 @@ pub fn space_spawner(
                 state.pending.push(spawn);
             }
         }
+        let spawned_any = !spawned_now.is_empty();
         for s in spawned_now {
             spawn_enemy(&mut commands, s.kind, s.pos, s.drops_power);
         }
         // 当所有 pending 都已 spawn 且场上敌人清空 → 进入下一波
-        if state.pending.is_empty() && enemies.iter().count() == 0 {
+        if wave_is_clear(state.pending.is_empty(), enemies.iter().count(), spawned_any) {
             state.wave_in_progress = false;
             state.between_wave_clock = 1.2;
         }
@@ -94,6 +95,7 @@ pub fn space_enemy_ai(
     let player_pos = players.iter().next().map(|t| t.translation.truncate());
     for (mut t, mut enemy) in &mut enemies {
         enemy.time_alive += delta;
+        enemy.hit_flash_left = (enemy.hit_flash_left - delta).max(0.0);
         update_enemy_position(&mut t, &enemy, delta, session.level);
 
         // 射击
@@ -280,7 +282,7 @@ pub fn space_despawn_offscreen(
     enemies: Query<(Entity, &Transform, &SpaceEnemy)>,
     powerups: Query<(Entity, &Transform), With<SpacePowerUp>>,
 ) {
-    if session.kind != GameKind::SpaceShooter {
+    if session.kind != GameKind::SpaceShooter || session.paused || session.finished {
         return;
     }
     for (e, t, enemy) in &enemies {
@@ -292,5 +294,22 @@ pub fn space_despawn_offscreen(
         if t.translation.y < PLAY_BOTTOM - 40.0 {
             commands.entity(e).despawn();
         }
+    }
+}
+
+fn wave_is_clear(pending_empty: bool, enemy_count: usize, spawned_now: bool) -> bool {
+    pending_empty && enemy_count == 0 && !spawned_now
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wave_is_clear;
+
+    #[test]
+    fn wave_does_not_finish_on_last_spawn_tick() {
+        assert!(!wave_is_clear(true, 0, true));
+        assert!(!wave_is_clear(false, 0, false));
+        assert!(!wave_is_clear(true, 1, false));
+        assert!(wave_is_clear(true, 0, false));
     }
 }

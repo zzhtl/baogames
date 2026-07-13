@@ -1,18 +1,31 @@
 use bevy::prelude::*;
 
 use crate::common::audio::{PlaySfx, SfxKind};
+use crate::common::input::ActionState;
 use crate::game::model::{GameKind, GameSession};
 
 use super::super::components::*;
 use super::super::constants::*;
 use super::super::grid::aim_dir;
-use super::super::resources::{BubbleAssets, BubbleStage};
+use super::super::resources::{BubbleAssets, BubbleControls, BubbleStage};
 use super::super::setup::spawn_flying_bubble;
+
+pub fn bubble_sample_input(
+    actions: Res<ActionState>,
+    session: Res<GameSession>,
+    mut controls: ResMut<BubbleControls>,
+) {
+    if session.kind != GameKind::BubbleBobble || session.paused || session.finished {
+        controls.clear();
+        return;
+    }
+    controls.sample(&actions);
+}
 
 pub fn bubble_player_input(
     mut commands: Commands,
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    mut controls: ResMut<BubbleControls>,
     session: Res<GameSession>,
     assets: Res<BubbleAssets>,
     mut stage: ResMut<BubbleStage>,
@@ -33,19 +46,18 @@ pub fn bubble_player_input(
     if stage.flash_clock > 0.0 {
         stage.flash_clock = (stage.flash_clock - dt).max(0.0);
     }
+    if stage.recoil_clock > 0.0 {
+        stage.recoil_clock = (stage.recoil_clock - dt).max(0.0);
+    }
     let mut aim = stage.aim;
-    if keys.pressed(KeyCode::ArrowLeft) || keys.pressed(KeyCode::KeyA) {
-        aim -= AIM_SPEED * dt;
-    }
-    if keys.pressed(KeyCode::ArrowRight) || keys.pressed(KeyCode::KeyD) {
-        aim += AIM_SPEED * dt;
-    }
+    aim += controls.aim_axis() * AIM_SPEED * dt;
     aim = aim.clamp(-MAX_AIM, MAX_AIM);
     stage.aim = aim;
 
     let dir = aim_dir(aim);
     if let Ok(mut t) = barrel_q.single_mut() {
-        let center = Vec2::new(CANNON_X, CANNON_Y) + dir * 22.0;
+        let recoil = (stage.recoil_clock / 0.1).clamp(0.0, 1.0) * 6.0;
+        let center = Vec2::new(CANNON_X, CANNON_Y) + dir * (22.0 - recoil);
         t.translation.x = center.x;
         t.translation.y = center.y;
         t.rotation = Quat::from_rotation_z(-aim);
@@ -58,11 +70,7 @@ pub fn bubble_player_input(
     }
 
     // 发射
-    let shoot = !stage.shot_active
-        && (keys.just_pressed(KeyCode::Space)
-            || keys.just_pressed(KeyCode::KeyJ)
-            || keys.just_pressed(KeyCode::ArrowUp)
-            || keys.just_pressed(KeyCode::KeyW));
+    let shoot = controls.take_fire(!stage.shot_active);
     if shoot {
         let muzzle = Vec2::new(CANNON_X, CANNON_Y) + dir * 36.0;
         spawn_flying_bubble(
@@ -77,6 +85,7 @@ pub fn bubble_player_input(
             commands.entity(e).despawn();
         }
         stage.shot_active = true;
+        stage.recoil_clock = 0.1;
         sfx.write(PlaySfx(SfxKind::Place));
     }
 }

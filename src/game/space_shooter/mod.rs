@@ -14,6 +14,7 @@ pub(super) use resources::SpaceState;
 pub(super) use setup::setup_stage;
 pub(super) use systems::{
     space_bullets_update, space_collisions, space_despawn_offscreen, space_enemy_ai,
-    space_hud_update, space_lifetimes, space_player_blink, space_player_input,
-    space_powerup_drop_and_pickup, space_spawner, space_stars_scroll,
+    space_effects_update, space_enemy_visual_update, space_hud_update, space_lifetimes,
+    space_player_blink, space_player_input, space_powerup_drop_and_pickup,
+    space_powerup_visual_update, space_sample_input, space_spawner, space_stars_scroll,
 };

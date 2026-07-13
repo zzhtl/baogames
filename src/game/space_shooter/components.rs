@@ -5,6 +5,9 @@ pub struct SpaceShipPlayer {
     pub fire_cd_left: f32,
     pub invincible_left: f32,
     pub blink_phase: f32,
+    pub roll_left: f32,
+    pub recoil_left: f32,
+    pub move_dir: Vec2,
 }
 
 #[derive(Component)]
@@ -23,6 +26,7 @@ pub struct SpaceEnemy {
     pub time_alive: f32,
     pub spawn_x: f32,
     pub drops_power: bool,
+    pub hit_flash_left: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,6 +108,17 @@ pub struct SpaceHud;
 
 #[derive(Component)]
 pub struct SpaceMessageText;
+
+#[derive(Component)]
+pub struct SpaceEngineFlame;
+
+#[derive(Component)]
+pub struct SpaceMuzzleFlash;
+
+#[derive(Component)]
+pub struct SpaceExplosionParticle {
+    pub grows: bool,
+}
 
 #[cfg(test)]
 mod tests {

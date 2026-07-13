@@ -9,7 +9,7 @@ use crate::game::model::GameEntity;
 use super::components::*;
 use super::constants::*;
 use super::grid::{cell_to_pos, cols_in_row, level_idx};
-use super::resources::{BubbleAssets, BubbleStage};
+use super::resources::{BubbleAssets, BubbleControls, BubbleStage};
 
 pub fn setup_stage(
     commands: &mut Commands,
@@ -18,6 +18,7 @@ pub fn setup_stage(
     hud_root: Entity,
     level: u8,
 ) {
+    commands.insert_resource(BubbleControls::default());
     paint_field(commands);
     paint_frame(commands);
 
@@ -50,7 +51,7 @@ pub fn setup_stage(
 
     spawn_loaded_bubble(commands, assets, current, 0.0);
     spawn_next_preview(commands, assets, font, next);
-    spawn_aim_dots(commands);
+    spawn_aim_dots(commands, assets, current);
     spawn_hud(commands, font, hud_root);
 
     commands.insert_resource(BubbleStage {
@@ -66,6 +67,8 @@ pub fn setup_stage(
         message: format!("第 {} 关 - 三连同色消除", level),
         message_clock: 2.4,
         flash_clock: 0.0,
+        recoil_clock: 0.0,
+        combo_streak: 0,
     });
 }
 
@@ -101,7 +104,8 @@ fn paint_field(commands: &mut Commands) {
         Vec2::new(PLAY_W, 8.0),
         Color::srgb(0.86, 0.52, 0.72),
         GameEntity,
-    );
+    )
+    .insert(BubbleCeiling);
     // 死亡线：警示红虚线
     for i in 0..16 {
         let x = PLAY_LEFT + 6.0 + i as f32 * (PLAY_W - 12.0) / 16.0 + 8.0;
@@ -111,7 +115,8 @@ fn paint_field(commands: &mut Commands) {
             Vec2::new(14.0, 3.0),
             Color::srgb(0.96, 0.42, 0.45),
             GameEntity,
-        );
+        )
+        .insert(BubbleDeadLine);
     }
 }
 
@@ -272,8 +277,8 @@ fn spawn_next_preview(commands: &mut Commands, assets: &BubbleAssets, font: &UiF
         });
 }
 
-fn spawn_aim_dots(commands: &mut Commands) {
-    for i in 0..7 {
+fn spawn_aim_dots(commands: &mut Commands, assets: &BubbleAssets, current: u8) {
+    for i in 0..AIM_DOT_COUNT {
         commands.spawn((
             Sprite::from_color(Color::srgba(0.4, 0.32, 0.52, 0.7), Vec2::splat(5.0)),
             Transform::from_translation(Vec3::new(
@@ -285,6 +290,18 @@ fn spawn_aim_dots(commands: &mut Commands) {
             GameEntity,
         ));
     }
+    commands.spawn((
+        Sprite {
+            image: assets.ball.clone(),
+            color: palette(current).with_alpha(0.34),
+            custom_size: Some(Vec2::splat(BUBBLE_D - 3.0)),
+            ..default()
+        },
+        Transform::from_translation(Vec3::new(CANNON_X, CANNON_Y + 80.0, Z_CANNON - 0.15)),
+        AimLanding,
+        BubbleColor(current),
+        GameEntity,
+    ));
 }
 
 fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
@@ -302,7 +319,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
         font,
         hud_root,
         "泡泡龙",
-        Vec2::new(hud_x, 270.0),
+        Vec2::new(hud_x, 244.0),
         FONT_HEADING,
         Color::srgb(0.94, 0.38, 0.62),
         (),
@@ -311,8 +328,8 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
         commands,
         font,
         hud_root,
-        "P1\n← / → 或 A/D 瞄准\nSpace / J 发射\nEsc 暂停",
-        Vec2::new(hud_x, 200.0),
+        "P1\n左右瞄准\n动作一发射\n开始键暂停",
+        Vec2::new(hud_x, 174.0),
         FONT_SMALL,
         Color::srgb(0.45, 0.32, 0.5),
         (),
@@ -396,7 +413,7 @@ pub fn spawn_flying_bubble(
                 ..default()
             },
             Transform::from_translation(pos.extend(Z_FLYING)),
-            FlyingBubble { vel },
+            FlyingBubble { vel, spin: 0.0 },
             BubbleColor(color_id),
             GameEntity,
         ))

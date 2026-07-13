@@ -15,6 +15,7 @@ pub struct GridBubble;
 #[derive(Component)]
 pub struct FlyingBubble {
     pub vel: Vec2,
+    pub spin: f32,
 }
 
 #[derive(Component)]
@@ -25,6 +26,13 @@ pub struct PoppingBubble {
 #[derive(Component)]
 pub struct FallingBubble {
     pub vy: f32,
+    pub vx: f32,
+    pub angular_speed: f32,
+}
+
+#[derive(Component)]
+pub struct SettlingBubble {
+    pub life: f32,
 }
 
 #[derive(Component)]
@@ -40,6 +48,15 @@ pub struct NextBubbleSprite;
 pub struct AimDot {
     pub idx: usize,
 }
+
+#[derive(Component)]
+pub struct AimLanding;
+
+#[derive(Component)]
+pub struct BubbleCeiling;
+
+#[derive(Component)]
+pub struct BubbleDeadLine;
 
 #[derive(Component)]
 pub struct BubbleHud;

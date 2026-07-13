@@ -62,7 +62,23 @@ pub fn bubble_shot_update(
 
     apply_score(&mut session, popped, fell);
     if popped > 0 {
+        stage.combo_streak = stage.combo_streak.saturating_add(1).min(9);
+        let bonus = combo_bonus(stage.combo_streak);
+        session.score += bonus;
+        stage.message = if stage.combo_streak > 1 {
+            format!("{} 连消 · 奖励 +{}", stage.combo_streak, bonus)
+        } else if fell > 0 {
+            format!("消除 {} · 掉落 {}", popped, fell)
+        } else {
+            format!("消除 {}", popped)
+        };
+        stage.message_clock = 1.1;
         sfx.write(PlaySfx(SfxKind::Match));
+    } else {
+        stage.combo_streak = 0;
+        commands
+            .entity(placed_entity)
+            .insert(SettlingBubble { life: SETTLE_LIFETIME });
     }
     if fell > 0 {
         sfx.write(PlaySfx(SfxKind::Coin));
@@ -115,9 +131,11 @@ fn step_flying_bubble(
         if new_pos.x - BUBBLE_R < PLAY_LEFT {
             new_pos.x = PLAY_LEFT + BUBBLE_R;
             fly.vel.x = fly.vel.x.abs();
+            fly.spin += 0.45;
         } else if new_pos.x + BUBBLE_R > PLAY_RIGHT {
             new_pos.x = PLAY_RIGHT - BUBBLE_R;
             fly.vel.x = -fly.vel.x.abs();
+            fly.spin -= 0.45;
         }
         let top_y = cell_to_pos(0, 0, stage.descend).y;
         if new_pos.y >= top_y {
@@ -152,6 +170,7 @@ fn step_flying_bubble(
         }
         tr.translation.x = new_pos.x;
         tr.translation.y = new_pos.y;
+        tr.rotation = Quat::from_rotation_z(fly.spin);
         if hit {
             settled = Some(new_pos);
             break;
@@ -212,7 +231,11 @@ fn resolve_pops(
             commands
                 .entity(e)
                 .remove::<GridBubble>()
-                .insert(FallingBubble { vy: 30.0 });
+                .insert(FallingBubble {
+                    vy: 30.0,
+                    vx: (cell.col as f32 - 5.5) * 6.0,
+                    angular_speed: if cell.col % 2 == 0 { -2.4 } else { 2.4 },
+                });
         }
     }
     (popped, fell)
@@ -228,6 +251,10 @@ pub(super) fn apply_score(session: &mut GameSession, popped: u32, fell: u32) {
     if fell > 0 {
         session.score += fell * 100;
     }
+}
+
+pub(super) fn combo_bonus(streak: u8) -> u32 {
+    streak.saturating_sub(1) as u32 * 100
 }
 
 pub(super) fn touches_dead_line(stage: &BubbleStage) -> bool {
@@ -336,6 +363,8 @@ mod tests {
             message: String::new(),
             message_clock: 0.0,
             flash_clock: 0.0,
+            recoil_clock: 0.0,
+            combo_streak: 0,
         }
     }
 
@@ -381,6 +410,14 @@ mod tests {
         apply_score(&mut s, 3, 2);
         // 150 + 200
         assert_eq!(s.score, 350);
+    }
+
+    #[test]
+    fn combo_bonus_starts_on_second_consecutive_clear() {
+        assert_eq!(combo_bonus(0), 0);
+        assert_eq!(combo_bonus(1), 0);
+        assert_eq!(combo_bonus(2), 100);
+        assert_eq!(combo_bonus(4), 300);
     }
 
     #[test]

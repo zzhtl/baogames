@@ -13,6 +13,8 @@ pub const PLAYER_FIRE_CD_LV3: f32 = 0.09;
 pub const PLAYER_BULLET_SPEED: f32 = 640.0;
 pub const ENEMY_BULLET_SPEED: f32 = 230.0;
 pub const PLAYER_INVINCIBLE: f32 = 1.6;
+pub const PLAYER_ROLL_TIME: f32 = 0.72;
+pub const PLAYER_ROLL_INVINCIBLE: f32 = 0.82;
 pub const PLAYER_RESPAWN_X: f32 = PLAY_OFFSET_X;
 pub const PLAYER_RESPAWN_Y: f32 = PLAY_BOTTOM + 60.0;
 

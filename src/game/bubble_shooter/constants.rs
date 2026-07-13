@@ -20,8 +20,10 @@ pub const CANNON_Y: f32 = PLAY_BOTTOM + 28.0;
 pub const SHOT_SPEED: f32 = 720.0;
 pub const MAX_AIM: f32 = 1.36;
 pub const AIM_SPEED: f32 = 1.7;
+pub const AIM_DOT_COUNT: usize = 12;
 
 pub const POP_LIFETIME: f32 = 0.22;
+pub const SETTLE_LIFETIME: f32 = 0.12;
 pub const FALL_GRAVITY: f32 = -780.0;
 
 pub const Z_FRAME: f32 = 0.4;
