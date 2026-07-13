@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 
 use crate::common::constants::SAVE_FILE;
+use crate::common::settings::UserSettings;
+
+const SAVE_MAGIC: [u8; 4] = *b"BAOG";
+const SAVE_VERSION: u16 = 2;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub(super) enum AppState {
@@ -74,16 +78,24 @@ impl GameKind {
         }
     }
 
+    pub(super) const fn max_level(self) -> u8 {
+        match self {
+            GameKind::SuperMario => 4,
+            _ => 10,
+        }
+    }
+
 }
 
 #[derive(Resource)]
 pub(super) struct SelectedGame(pub(super) GameKind);
 
-#[derive(Resource, Serialize, Deserialize)]
+#[derive(Resource, Clone, Serialize, Deserialize)]
 pub(super) struct SaveData {
     pub(super) high_scores: [u32; 8],
     pub(super) unlocked_levels: [u8; 8],
-    pub(super) volume: f32,
+    pub(super) selected_levels: [u8; 8],
+    pub(super) settings: UserSettings,
 }
 
 impl Default for SaveData {
@@ -91,9 +103,25 @@ impl Default for SaveData {
         Self {
             high_scores: [0; 8],
             unlocked_levels: [1; 8],
-            volume: 0.7,
+            selected_levels: [1; 8],
+            settings: UserSettings::default(),
         }
     }
+}
+
+/// 1.x 版本直接序列化的存档形状，字段顺序不可修改。
+#[derive(Serialize, Deserialize)]
+struct LegacySaveData {
+    high_scores: [u32; 8],
+    unlocked_levels: [u8; 8],
+    volume: f32,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SaveEnvelope {
+    magic: [u8; 4],
+    version: u16,
+    data: SaveData,
 }
 
 /// 存档文件的绝对路径。
@@ -113,16 +141,120 @@ fn save_path() -> std::path::PathBuf {
 
 impl SaveData {
     pub(super) fn load() -> Self {
-        match fs::read(save_path()) {
-            Ok(bytes) => bincode::deserialize(&bytes).unwrap_or_default(),
-            Err(_) => Self::default(),
+        let Ok(bytes) = fs::read(save_path()) else {
+            return Self::default();
+        };
+        Self::decode(&bytes).unwrap_or_default()
+    }
+
+    fn decode(bytes: &[u8]) -> Option<Self> {
+        if let Ok(envelope) = bincode::deserialize::<SaveEnvelope>(bytes)
+            && envelope.magic == SAVE_MAGIC
+            && envelope.version == SAVE_VERSION
+        {
+            let mut data = envelope.data;
+            data.sanitize();
+            return Some(data);
         }
+        if let Ok(legacy) = bincode::deserialize::<LegacySaveData>(bytes) {
+            let volume = legacy.volume.clamp(0.0, 1.0);
+            let mut data = Self {
+                high_scores: legacy.high_scores,
+                unlocked_levels: legacy.unlocked_levels,
+                selected_levels: legacy.unlocked_levels,
+                settings: UserSettings {
+                    music_volume: volume,
+                    sfx_volume: volume,
+                    ..default()
+                },
+            };
+            data.sanitize();
+            return Some(data);
+        }
+        None
     }
 
     pub(super) fn store(&self) {
-        if let Ok(bytes) = bincode::serialize(self) {
-            let _ = fs::write(save_path(), bytes);
+        let envelope = SaveEnvelope {
+            magic: SAVE_MAGIC,
+            version: SAVE_VERSION,
+            data: self.clone(),
+        };
+        if let Ok(bytes) = bincode::serialize(&envelope) {
+            let path = save_path();
+            let temporary = path.with_extension("tmp");
+            if fs::write(&temporary, &bytes).is_ok() && fs::rename(&temporary, &path).is_ok() {
+                return;
+            }
+            let _ = fs::write(path, bytes);
+            let _ = fs::remove_file(temporary);
         }
+    }
+
+    fn sanitize(&mut self) {
+        self.settings.sanitize();
+        for (index, kind) in GameKind::ALL.iter().copied().enumerate() {
+            let max = kind.max_level();
+            self.unlocked_levels[index] = self.unlocked_levels[index].clamp(1, max);
+            self.selected_levels[index] = self.selected_levels[index]
+                .clamp(1, self.unlocked_levels[index]);
+        }
+    }
+}
+
+#[cfg(test)]
+mod save_tests {
+    use super::*;
+    use crate::common::settings::{DisplayMode, GameplayProfile};
+
+    #[test]
+    fn legacy_save_migrates_progress_and_volume() {
+        let legacy = LegacySaveData {
+            high_scores: [42; 8],
+            unlocked_levels: [3; 8],
+            volume: 0.4,
+        };
+        let bytes = bincode::serialize(&legacy).expect("legacy test data should serialize");
+        let migrated = SaveData::decode(&bytes).expect("legacy save should migrate");
+        assert_eq!(migrated.high_scores, [42; 8]);
+        assert_eq!(migrated.unlocked_levels[GameKind::SuperMario.index()], 3);
+        assert_eq!(migrated.selected_levels[0], 3);
+        assert_eq!(migrated.settings.music_volume, 0.4);
+        assert_eq!(migrated.settings.sfx_volume, 0.4);
+    }
+
+    #[test]
+    fn current_envelope_round_trips_settings() {
+        let mut data = SaveData::default();
+        data.settings.display_mode = DisplayMode::Widescreen16x9;
+        data.settings.gameplay_profile = GameplayProfile::Assist;
+        let envelope = SaveEnvelope {
+            magic: SAVE_MAGIC,
+            version: SAVE_VERSION,
+            data,
+        };
+        let bytes = bincode::serialize(&envelope).expect("save envelope should serialize");
+        let decoded = SaveData::decode(&bytes).expect("current save should decode");
+        assert_eq!(decoded.settings.display_mode, DisplayMode::Widescreen16x9);
+        assert_eq!(decoded.settings.gameplay_profile, GameplayProfile::Assist);
+    }
+
+    #[test]
+    fn migration_clamps_mario_to_four_levels() {
+        let legacy = LegacySaveData {
+            high_scores: [0; 8],
+            unlocked_levels: [10; 8],
+            volume: 1.5,
+        };
+        let bytes = bincode::serialize(&legacy).expect("legacy test data should serialize");
+        let migrated = SaveData::decode(&bytes).expect("legacy save should migrate");
+        assert_eq!(migrated.unlocked_levels[GameKind::SuperMario.index()], 4);
+        assert_eq!(migrated.settings.music_volume, 1.0);
+    }
+
+    #[test]
+    fn corrupt_save_is_rejected() {
+        assert!(SaveData::decode(b"not a baogames save").is_none());
     }
 }
 

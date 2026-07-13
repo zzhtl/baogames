@@ -9,6 +9,7 @@ use bevy::prelude::*;
 use crate::common::constants::{
     ARENA_H, ARENA_W, FONT_BODY, FONT_TITLE, Z_OVERLAY, Z_OVERLAY_PANEL, Z_OVERLAY_TEXT,
 };
+use crate::common::pixel_canvas::InGameCamera;
 use crate::common::render::UiFont;
 
 use super::model::GameSession;
@@ -39,18 +40,23 @@ pub(super) fn overlay_kind(session: &GameSession) -> Option<OverlayKind> {
 }
 
 /// 标题 / 副标题（游戏自己的结果细节）/ 按键提示，文案全中文统一。
-pub(super) fn overlay_texts(kind: OverlayKind, status: &str) -> (&'static str, String, &'static str) {
+pub(super) fn overlay_texts(
+    kind: OverlayKind,
+    status: &str,
+    has_next_level: bool,
+) -> (&'static str, String, &'static str) {
     match kind {
-        OverlayKind::Paused => ("已暂停", String::new(), "Esc 继续 · Backspace 返回菜单"),
-        OverlayKind::Won => (
-            "通关！",
+        OverlayKind::Paused => ("已暂停", String::new(), "开始键继续 · 返回键回到卡带墙"),
+        OverlayKind::Won if has_next_level => (
+            "关卡完成！",
             status.to_string(),
-            "Enter 再来一局 · Backspace 返回菜单",
+            "动作一 / 开始键进入下一关 · 返回键回到卡带墙",
         ),
+        OverlayKind::Won => ("通关！", status.to_string(), "动作一 / 开始键再玩一次 · 返回键回到卡带墙"),
         OverlayKind::Lost => (
             "游戏结束",
             status.to_string(),
-            "Enter 重试 · Backspace 返回菜单",
+            "动作一 / 开始键重试 · 返回键回到卡带墙",
         ),
     }
 }
@@ -67,7 +73,7 @@ pub(super) fn overlay_sync(
     mut commands: Commands,
     session: Option<Res<GameSession>>,
     font: Res<UiFont>,
-    camera_q: Query<Entity, With<Camera2d>>,
+    camera_q: Query<Entity, With<InGameCamera>>,
     existing: Query<Entity, With<OverlayEntity>>,
     mut shown: Local<Option<OverlayKind>>,
 ) {
@@ -122,7 +128,8 @@ pub(super) fn overlay_sync(
         ),
     );
 
-    let (title, detail, hint) = overlay_texts(kind, &session.status);
+    let has_next_level = session.won && session.level < session.kind.max_level();
+    let (title, detail, hint) = overlay_texts(kind, &session.status, has_next_level);
     let mut spawn_text = |value: &str, y: f32, size: f32, color: Color| {
         commands.spawn((
             Text2d::new(value),
@@ -173,7 +180,7 @@ mod tests {
 
     #[test]
     fn finished_beats_paused() {
-        // 结束状态优先于暂停：结束后 Esc 不再是"继续"
+        // 结束状态优先于暂停：结束后开始键不再是“继续”
         assert_eq!(
             overlay_kind(&session(true, true, true)),
             Some(OverlayKind::Won)
@@ -186,12 +193,12 @@ mod tests {
 
     #[test]
     fn texts_carry_status_detail() {
-        let (title, detail, hint) = overlay_texts(OverlayKind::Won, "得分 123");
-        assert_eq!(title, "通关！");
+        let (title, detail, hint) = overlay_texts(OverlayKind::Won, "得分 123", true);
+        assert_eq!(title, "关卡完成！");
         assert_eq!(detail, "得分 123");
-        assert!(hint.contains("Enter"));
+        assert!(hint.contains("下一关"));
 
-        let (title, detail, _) = overlay_texts(OverlayKind::Paused, "得分 123");
+        let (title, detail, _) = overlay_texts(OverlayKind::Paused, "得分 123", false);
         assert_eq!(title, "已暂停");
         assert!(detail.is_empty(), "暂停不显示结果细节");
     }

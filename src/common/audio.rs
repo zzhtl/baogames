@@ -10,10 +10,28 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bevy::audio::{AddAudioSource, AudioPlayer, Decodable, PlaybackSettings, Source};
+use bevy::audio::{
+    AddAudioSource, AudioPlayer, AudioSink, AudioSinkPlayback, Decodable, PlaybackSettings, Source,
+    Volume,
+};
 use bevy::prelude::*;
 
 pub const SFX_SAMPLE_RATE: u32 = 22_050;
+
+#[derive(Resource, Clone, Copy)]
+pub struct AudioMix {
+    pub music_volume: f32,
+    pub sfx_volume: f32,
+}
+
+impl Default for AudioMix {
+    fn default() -> Self {
+        Self {
+            music_volume: 0.7,
+            sfx_volume: 0.8,
+        }
+    }
+}
 
 // ---------- 资产与解码器 ----------
 
@@ -258,6 +276,104 @@ pub fn build_sfx(kind: SfxKind) -> Vec<f32> {
     }
 }
 
+// ---------- 原创芯片音乐 ----------
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MusicKind {
+    Menu,
+    Tank,
+    BombMaze,
+    SpaceShooter,
+    SuperMario,
+    Contra,
+    BubbleShooter,
+    MemoryMatch,
+    Sokoban,
+}
+
+impl MusicKind {
+    pub const COUNT: usize = 9;
+    pub const ALL: [Self; Self::COUNT] = [
+        Self::Menu,
+        Self::Tank,
+        Self::BombMaze,
+        Self::SpaceShooter,
+        Self::SuperMario,
+        Self::Contra,
+        Self::BubbleShooter,
+        Self::MemoryMatch,
+        Self::Sokoban,
+    ];
+
+    fn index(self) -> usize {
+        Self::ALL.iter().position(|kind| *kind == self).unwrap_or(0)
+    }
+}
+
+fn midi_frequency(note: i8) -> f32 {
+    440.0 * 2.0_f32.powf((note as f32 - 69.0) / 12.0)
+}
+
+fn chip_note(note: i8, duration: f32, duty: f32, gain: f32, triangle: bool) -> Vec<f32> {
+    let sample_count = (duration * SFX_SAMPLE_RATE as f32) as usize;
+    if note < 0 {
+        return vec![0.0; sample_count];
+    }
+    let frequency = midi_frequency(note);
+    let attack = (SFX_SAMPLE_RATE as f32 * 0.004) as usize;
+    let release = (SFX_SAMPLE_RATE as f32 * 0.025) as usize;
+    let mut phase = 0.0_f32;
+    (0..sample_count)
+        .map(|index| {
+            phase = (phase + frequency / SFX_SAMPLE_RATE as f32).fract();
+            let wave = if triangle {
+                if phase < 0.5 {
+                    phase * 4.0 - 1.0
+                } else {
+                    3.0 - phase * 4.0
+                }
+            } else if phase < duty {
+                1.0
+            } else {
+                -1.0
+            };
+            let attack_gain = (index as f32 / attack.max(1) as f32).min(1.0);
+            let remaining = sample_count.saturating_sub(index + 1);
+            let release_gain = (remaining as f32 / release.max(1) as f32).min(1.0);
+            wave * gain * attack_gain * release_gain
+        })
+        .collect()
+}
+
+fn sequence(pattern: &[i8], step_seconds: f32, duty: f32, gain: f32, triangle: bool) -> Vec<f32> {
+    let mut samples = Vec::with_capacity(
+        (pattern.len() as f32 * step_seconds * SFX_SAMPLE_RATE as f32) as usize,
+    );
+    for &note in pattern {
+        samples.extend(chip_note(note, step_seconds, duty, gain, triangle));
+    }
+    samples
+}
+
+/// 九首短循环均为本项目原创动机，只借用早期主机的方波/三角波音色。
+pub fn build_music(kind: MusicKind) -> Vec<f32> {
+    let (bpm, lead, bass): (f32, &[i8], &[i8]) = match kind {
+        MusicKind::Menu => (132.0, &[72, 76, 79, 84, 79, 76, 74, 79, 77, 81, 84, 81, 79, 74, 76, -1], &[48, 48, 55, 55, 53, 53, 55, 55, 50, 50, 57, 57, 55, 55, 43, 43]),
+        MusicKind::Tank => (118.0, &[55, 55, 58, 55, 62, -1, 60, 58, 55, 58, 63, 62, 58, -1, 53, 55], &[36, 36, 36, 43, 39, 39, 41, 41, 36, 36, 43, 43, 41, 41, 34, 34]),
+        MusicKind::BombMaze => (148.0, &[67, 70, 74, 70, 65, 69, 72, 69, 67, 72, 75, 72, 70, 67, 65, -1], &[43, 43, 46, 46, 41, 41, 45, 45, 43, 43, 48, 48, 46, 46, 41, 41]),
+        MusicKind::SpaceShooter => (156.0, &[76, 79, 83, 86, 83, 79, 78, 81, 84, 88, 84, 81, 79, 83, 86, 91], &[40, 47, 40, 47, 42, 49, 42, 49, 43, 50, 43, 50, 38, 45, 38, 45]),
+        MusicKind::SuperMario => (164.0, &[72, 76, 79, 76, 74, 77, 81, 77, 76, 79, 83, 79, 77, 74, 72, 67], &[48, 55, 52, 55, 50, 57, 53, 57, 48, 55, 52, 55, 50, 57, 43, 43]),
+        MusicKind::Contra => (172.0, &[64, 67, 69, 64, 72, 69, 67, 64, 65, 69, 72, 77, 72, 69, 67, 62], &[40, 40, 47, 40, 41, 41, 48, 41, 43, 43, 50, 43, 38, 38, 45, 38]),
+        MusicKind::BubbleShooter => (136.0, &[77, 81, 84, 82, 79, 82, 86, 84, 81, 84, 89, 86, 84, 82, 79, 81], &[53, 60, 57, 60, 55, 62, 58, 62, 53, 60, 57, 60, 55, 62, 53, 53]),
+        MusicKind::MemoryMatch => (104.0, &[72, -1, 76, 79, 74, -1, 77, 81, 76, -1, 79, 83, 74, 77, 76, -1], &[48, 48, 52, 52, 50, 50, 53, 53, 48, 48, 55, 55, 50, 50, 43, 43]),
+        MusicKind::Sokoban => (112.0, &[60, 63, 67, -1, 62, 65, 69, -1, 63, 67, 70, 67, 62, 65, 60, -1], &[36, 43, 39, 43, 38, 45, 41, 45, 39, 46, 43, 46, 38, 45, 36, 36]),
+    };
+    let step_seconds = 30.0 / bpm;
+    let melody = sequence(lead, step_seconds, 0.25, 0.13, false);
+    let low = sequence(bass, step_seconds, 0.5, 0.10, true);
+    mix(&melody, &low)
+}
+
 // ---------- 资源与播放 ----------
 
 #[derive(Resource)]
@@ -286,6 +402,38 @@ impl FromWorld for SfxAssets {
     }
 }
 
+#[derive(Resource)]
+pub struct MusicAssets {
+    handles: Vec<Handle<Sfx>>,
+}
+
+impl MusicAssets {
+    fn handle(&self, kind: MusicKind) -> Handle<Sfx> {
+        self.handles[kind.index()].clone()
+    }
+}
+
+impl FromWorld for MusicAssets {
+    fn from_world(world: &mut World) -> Self {
+        let mut assets = world.resource_mut::<Assets<Sfx>>();
+        let handles = MusicKind::ALL
+            .iter()
+            .map(|&kind| {
+                assets.add(Sfx {
+                    samples: build_music(kind).into(),
+                })
+            })
+            .collect();
+        Self { handles }
+    }
+}
+
+#[derive(Component)]
+pub struct MusicEntity;
+
+#[derive(Message)]
+pub struct PlayMusic(pub MusicKind);
+
 /// 播放一个音效：任何系统写入该消息即可。
 #[derive(Message)]
 pub struct PlaySfx(pub SfxKind);
@@ -294,6 +442,7 @@ pub struct PlaySfx(pub SfxKind);
 pub fn sfx_playback(
     mut reader: MessageReader<PlaySfx>,
     assets: Res<SfxAssets>,
+    mix: Res<AudioMix>,
     mut commands: Commands,
 ) {
     let mut seen = [false; SfxKind::COUNT];
@@ -305,8 +454,40 @@ pub fn sfx_playback(
         seen[i] = true;
         commands.spawn((
             AudioPlayer::<Sfx>(assets.handle(*kind)),
-            PlaybackSettings::DESPAWN,
+            PlaybackSettings::DESPAWN.with_volume(Volume::Linear(mix.sfx_volume)),
         ));
+    }
+}
+
+pub fn music_playback(
+    mut reader: MessageReader<PlayMusic>,
+    assets: Res<MusicAssets>,
+    mix: Res<AudioMix>,
+    existing: Query<Entity, With<MusicEntity>>,
+    mut commands: Commands,
+) {
+    let Some(PlayMusic(kind)) = reader.read().last() else {
+        return;
+    };
+    for entity in &existing {
+        commands.entity(entity).despawn();
+    }
+    commands.spawn((
+        AudioPlayer::<Sfx>(assets.handle(*kind)),
+        PlaybackSettings::LOOP.with_volume(Volume::Linear(mix.music_volume)),
+        MusicEntity,
+    ));
+}
+
+fn music_volume_sync(
+    mix: Res<AudioMix>,
+    mut sinks: Query<&mut AudioSink, With<MusicEntity>>,
+) {
+    if !mix.is_changed() {
+        return;
+    }
+    for mut sink in &mut sinks {
+        sink.set_volume(Volume::Linear(mix.music_volume));
     }
 }
 
@@ -316,8 +497,11 @@ impl Plugin for SfxPlugin {
     fn build(&self, app: &mut App) {
         app.add_audio_source::<Sfx>()
             .add_message::<PlaySfx>()
+            .add_message::<PlayMusic>()
+            .init_resource::<AudioMix>()
             .init_resource::<SfxAssets>()
-            .add_systems(Update, sfx_playback);
+            .init_resource::<MusicAssets>()
+            .add_systems(Update, (sfx_playback, music_playback, music_volume_sync));
     }
 }
 
@@ -385,5 +569,17 @@ mod tests {
         assert_eq!(m.len(), 20);
         assert!(m[0] <= 1.0);
         assert_eq!(m[15], 0.9);
+    }
+
+    #[test]
+    fn every_music_loop_is_nonempty_and_bounded() {
+        for kind in MusicKind::ALL {
+            let samples = build_music(kind);
+            assert!(samples.len() > SFX_SAMPLE_RATE as usize * 2, "{kind:?} 循环过短");
+            let peak = samples.iter().fold(0.0_f32, |max, sample| max.max(sample.abs()));
+            assert!(peak <= 1.0, "{kind:?} 峰值超限 {peak}");
+            assert!(peak > 0.05, "{kind:?} 能量过低");
+            assert!(samples.last().copied().unwrap_or(1.0).abs() < 0.01);
+        }
     }
 }

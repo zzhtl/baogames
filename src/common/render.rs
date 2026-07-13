@@ -10,9 +10,9 @@ pub struct UiFont(pub Handle<Font>);
 impl FromWorld for UiFont {
     fn from_world(world: &mut World) -> Self {
         let font = Font::try_from_bytes(
-            include_bytes!("../../assets/fonts/NotoSansCJK-Regular.ttc").to_vec(),
+            include_bytes!("../../assets/fonts/fusion-pixel-12px-proportional-zh_hans.ttf").to_vec(),
         )
-        .expect("embedded CJK font must be valid");
+        .expect("embedded Fusion Pixel CJK font must be valid");
         let mut fonts = world.resource_mut::<Assets<Font>>();
         UiFont(fonts.add(font))
     }
@@ -91,8 +91,8 @@ pub fn text<'a, M: Component>(
 /// - `child_marker`：打到每个子矩形上的组件（通常是 `GameEntity`，便于统一清理）。
 /// - `parent_extra`：父实体的额外组件（如玩家/敌人逻辑组件，外加 `GameEntity`）。
 ///
-/// 返回父实体 id，方便调用方继续挂子节点或记录。子矩形按各自 `base_z + dz` 叠加，
-/// 与离线预览光栅器的画家算法一致。
+/// 返回父实体 id，方便调用方继续挂子节点或记录。父实体位于 `base_z`，子矩形
+/// 使用局部 `dz`，因此最终世界层级为 `base_z + dz`，与离线预览的画家算法一致。
 pub fn spawn_sprite_def(
     commands: &mut Commands,
     def: &SpriteDef,
@@ -112,7 +112,7 @@ pub fn spawn_sprite_def(
         commands
             .spawn((
                 Sprite::from_color(p.color, Vec2::new(p.w, p.h)),
-                Transform::from_translation(Vec3::new(p.dx, p.dy, base_z + p.dz)),
+                Transform::from_translation(Vec3::new(p.dx, p.dy, p.dz)),
                 child_marker.clone(),
             ))
             .insert(ChildOf(parent));
