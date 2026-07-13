@@ -136,20 +136,18 @@ pub fn bm_flame_tick(
     mut commands: Commands,
     time: Res<Time>,
     session: Res<GameSession>,
-    mut flames: Query<(Entity, &mut BMFlame, &mut Sprite)>,
+    mut flames: Query<(Entity, &mut BMFlame, &mut Transform)>,
 ) {
     if session.kind != GameKind::BombMaze || session.paused || session.finished {
         return;
     }
-    for (entity, mut flame, mut sprite) in &mut flames {
+    for (entity, mut flame, mut transform) in &mut flames {
         flame.timer.tick(time.delta());
         let t = flame.timer.fraction();
-        let alpha = (1.0 - t).clamp(0.0, 1.0);
-        let mut c = Color::srgba(1.0, 0.55, 0.18, alpha);
-        if t > 0.5 {
-            c = Color::srgba(1.0, 0.85, 0.32, alpha);
-        }
-        sprite.color = c;
+        let envelope = if t < 0.15 { t / 0.15 } else { 1.0 - t * 0.35 };
+        let flicker = (t * 32.0).sin() * 0.08;
+        let scale = (envelope + flicker).clamp(0.72, 1.08);
+        transform.scale = Vec3::new(scale, 1.0 / scale.max(0.8), 1.0);
         if flame.timer.just_finished() {
             commands.entity(entity).despawn();
         }

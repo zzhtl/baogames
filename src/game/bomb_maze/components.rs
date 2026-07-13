@@ -33,6 +33,25 @@ impl Dir4 {
     pub fn all() -> [Dir4; 4] {
         [Dir4::Up, Dir4::Down, Dir4::Left, Dir4::Right]
     }
+
+    pub fn from_input(value: Vec2) -> Option<Self> {
+        if value.length_squared() < 0.05 {
+            return None;
+        }
+        if value.x.abs() >= value.y.abs() {
+            Some(if value.x > 0.0 {
+                Dir4::Right
+            } else {
+                Dir4::Left
+            })
+        } else {
+            Some(if value.y > 0.0 {
+                Dir4::Up
+            } else {
+                Dir4::Down
+            })
+        }
+    }
 }
 
 // ========== 道具 ==========
@@ -130,6 +149,9 @@ pub struct BMPlayer {
     pub detonate_cd: f32,
     pub walking_off: Vec<Entity>,
     pub invuln: f32,
+    pub facing: Dir4,
+    pub moving: bool,
+    pub motion_t: f32,
 }
 
 impl BMPlayer {
@@ -146,6 +168,9 @@ impl BMPlayer {
             detonate_cd: 0.0,
             walking_off: Vec::new(),
             invuln: BM_INVULN_TIME,
+            facing: Dir4::Down,
+            moving: false,
+            motion_t: 0.0,
         }
     }
 
@@ -217,6 +242,8 @@ pub enum BMHud {
     P2Lives,
     Enemies,
     Status,
+    P1Power,
+    P2Power,
 }
 
 #[cfg(test)]
@@ -236,6 +263,13 @@ mod tests {
         assert_eq!(Dir4::Down.vec(), Vec2::new(0.0, -1.0));
         assert_eq!(Dir4::Left.vec(), Vec2::new(-1.0, 0.0));
         assert_eq!(Dir4::Right.vec(), Vec2::new(1.0, 0.0));
+    }
+
+    #[test]
+    fn input_is_quantized_to_one_classic_axis() {
+        assert_eq!(Dir4::from_input(Vec2::new(1.0, 1.0)), Some(Dir4::Right));
+        assert_eq!(Dir4::from_input(Vec2::new(0.2, -1.0)), Some(Dir4::Down));
+        assert_eq!(Dir4::from_input(Vec2::ZERO), None);
     }
 
     #[test]

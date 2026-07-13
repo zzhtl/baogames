@@ -1,19 +1,39 @@
 use bevy::prelude::*;
 
 use crate::common::audio::{PlaySfx, SfxKind};
-use crate::common::input::input_for;
+use crate::common::input::ActionState;
+use crate::common::settings::{InputAction, PlayerSlot};
 use crate::game::model::{GameKind, GameSession};
 
 use super::super::components::*;
 use super::super::constants::*;
 use super::super::geometry::{aabb_overlap, tile_center, world_to_tile};
-use super::super::resources::BMStage;
+use super::super::resources::{BMControls, BMStage};
 use super::super::setup::spawn_bm_bomb;
+
+pub fn bm_sample_input(
+    actions: Res<ActionState>,
+    session: Res<GameSession>,
+    mut controls: ResMut<BMControls>,
+) {
+    if session.kind != GameKind::BombMaze || session.paused || session.finished {
+        controls.clear();
+        return;
+    }
+    for player in PlayerSlot::ALL {
+        controls.sample(
+            player,
+            actions.movement(player),
+            actions.just_pressed(player, InputAction::Primary),
+            actions.just_pressed(player, InputAction::Secondary),
+        );
+    }
+}
 
 pub fn bm_player_input(
     mut commands: Commands,
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    mut controls: ResMut<BMControls>,
     session: Res<GameSession>,
     mut stage: ResMut<BMStage>,
     mut players: Query<(Entity, &mut Transform, &mut BMPlayer)>,
@@ -68,10 +88,13 @@ pub fn bm_player_input(
             player.invuln = (player.invuln - delta).max(0.0);
         }
 
-        let input = input_for(&keys, player.id);
-        let mut dir = input.move_dir;
-        if dir.length_squared() > 1.01 {
-            dir = dir.normalize();
+        let movement = controls.movement(player.id);
+        let direction = Dir4::from_input(movement);
+        let dir = direction.map(Dir4::vec).unwrap_or(Vec2::ZERO);
+        let place_requested = controls.take_place(player.id);
+        let detonate_requested = controls.take_detonate(player.id);
+        if let Some(direction) = direction {
+            player.facing = direction;
         }
 
         let speed = player.speed();
@@ -91,6 +114,10 @@ pub fn bm_player_input(
 
         tf.translation.x = target_pos.x;
         tf.translation.y = target_pos.y;
+        player.moving = target_pos.distance_squared(pos) > 0.001;
+        if player.moving {
+            player.motion_t += delta;
+        }
 
         // 离开自己放下的炸弹后，从豁免列表移除：
         // 用 bbox 重叠判断，避免玩家走到 tile 边界时（中心刚跨格、bbox 还压在炸弹上）
@@ -113,7 +140,7 @@ pub fn bm_player_input(
         }
 
         // 放炸弹
-        if input.fire && player.place_cd <= 0.0 && player.bombs_alive < player.max_bombs {
+        if place_requested && player.place_cd <= 0.0 && player.bombs_alive < player.max_bombs {
             let (pc, pr) = world_to_tile(target_pos);
             if !occupied_bomb_cells.contains(&(pc, pr)) && !blocked[pc as usize][pr as usize] {
                 place_requests.push((entity, pc, pr, player.bomb_range, player.remote));
@@ -123,7 +150,7 @@ pub fn bm_player_input(
         }
 
         // 遥控引爆：只能引爆自己拥有的、最早放下的一颗遥控炸弹
-        if input.jump && player.remote && player.detonate_cd <= 0.0 {
+        if detonate_requested && player.remote && player.detonate_cd <= 0.0 {
             if let Some((bomb_e, _, _, _, _)) = bomb_meta
                 .iter()
                 .find(|(_, _, _, owner, remote)| *remote && *owner == Some(entity))

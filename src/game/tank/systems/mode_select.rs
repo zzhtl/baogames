@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::common::input::ActionState;
+use crate::common::settings::{InputAction, PlayerSlot};
 use crate::game::model::{GameKind, GameSession};
 
 use super::super::components::{ModeSelectUi, P2Hud};
@@ -8,7 +10,7 @@ use super::super::setup::spawn_initial_players_for_mode;
 
 pub fn tank_mode_select(
     mut commands: Commands,
-    keys: Res<ButtonInput<KeyCode>>,
+    actions: Res<ActionState>,
     session: Res<GameSession>,
     mut stage: ResMut<TankStage>,
     ui: Query<Entity, With<ModeSelectUi>>,
@@ -18,9 +20,9 @@ pub fn tank_mode_select(
     {
         return;
     }
-    let two_player = if keys.just_pressed(KeyCode::Digit1) {
+    let two_player = if actions.just_pressed(PlayerSlot::One, InputAction::Primary) {
         false
-    } else if keys.just_pressed(KeyCode::Digit2) {
+    } else if actions.just_pressed(PlayerSlot::One, InputAction::Secondary) {
         true
     } else {
         return;

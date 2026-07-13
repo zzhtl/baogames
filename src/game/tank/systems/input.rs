@@ -1,19 +1,38 @@
 use bevy::prelude::*;
 
 use crate::common::audio::{PlaySfx, SfxKind};
-use crate::common::input::input_for;
+use crate::common::input::ActionState;
+use crate::common::settings::{InputAction, PlayerSlot};
 use crate::game::model::{GameKind, GameSession};
 
 use super::super::components::*;
-use super::super::constants::TANK_SIZE;
-use super::super::geometry::{play_max, play_min, snap_perpendicular};
-use super::super::resources::TankStage;
+use super::super::constants::{TANK_SIZE, TURN_WINDOW};
+use super::super::geometry::{play_max, play_min, try_turn_at_lane};
+use super::super::resources::{TankControls, TankStage};
 use super::super::setup::{spawn_bullet, spawn_muzzle_flash};
+
+pub fn tank_sample_input(
+    actions: Res<ActionState>,
+    session: Res<GameSession>,
+    mut controls: ResMut<TankControls>,
+) {
+    if session.kind != GameKind::Tank || session.paused || session.finished {
+        controls.clear();
+        return;
+    }
+    for player in PlayerSlot::ALL {
+        controls.set(
+            player,
+            actions.movement(player),
+            actions.pressed(player, InputAction::Primary),
+        );
+    }
+}
 
 pub fn tank_player_input(
     mut commands: Commands,
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    controls: Res<TankControls>,
     session: Res<GameSession>,
     mut stage: ResMut<TankStage>,
     mut tanks: Query<
@@ -40,21 +59,23 @@ pub fn tank_player_input(
     }
 
     for (entity, player, mut tf, mut dir, mut tank) in &mut tanks {
-        let input = input_for(&keys, player.id);
+        let movement = controls.movement(player.id);
         tank.fire_cd_left = (tank.fire_cd_left - delta).max(0.0);
         if tank.shield_left > 0.0 {
             tank.shield_left = (tank.shield_left - delta).max(0.0);
         }
 
-        if let Some(want) = TankDir::from_input(input.move_dir) {
-            if want != *dir {
+        if let Some(want) = TankDir::from_input(movement) {
+            if want != *dir && try_turn_at_lane(&mut tf.translation, *dir, want, TURN_WINDOW) {
                 *dir = want;
                 tf.rotation = Quat::from_rotation_z(want.rotation());
-                snap_perpendicular(&mut tf.translation, want);
             }
         }
 
-        if input.fire && tank.fire_cd_left <= 0.0 && tank.bullets_alive < tank.max_bullets {
+        if controls.fire_held(player.id)
+            && tank.fire_cd_left <= 0.0
+            && tank.bullets_alive < tank.max_bullets
+        {
             let muzzle = tf.translation.truncate() + dir.vec() * (TANK_SIZE * 0.5 + 2.0);
             // 只有炮口仍在场地内才允许射击，避免朝边界外开火立即销毁导致体感"打不出子弹"
             let pmin = play_min();

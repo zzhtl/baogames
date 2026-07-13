@@ -55,6 +55,34 @@ pub fn bm_flame_damage(
     }
 }
 
+pub fn bm_flame_burn_powerups(
+    mut commands: Commands,
+    session: Res<GameSession>,
+    flames: Query<(&Transform, &Collider), With<BMFlame>>,
+    powerups: Query<(Entity, &Transform, &Collider), With<BMPowerup>>,
+    mut sfx: MessageWriter<PlaySfx>,
+) {
+    if session.kind != GameKind::BombMaze || session.paused || session.finished {
+        return;
+    }
+    let flame_data: Vec<(Vec2, Vec2)> = flames
+        .iter()
+        .map(|(transform, collider)| (transform.translation.truncate(), collider.size))
+        .collect();
+    for (entity, transform, collider) in &powerups {
+        let position = transform.translation.truncate();
+        if flame_data
+            .iter()
+            .any(|(flame_position, flame_size)| {
+                aabb_overlap(position, collider.size, *flame_position, *flame_size)
+            })
+        {
+            commands.entity(entity).despawn();
+            sfx.write(PlaySfx(SfxKind::Hit));
+        }
+    }
+}
+
 pub fn bm_enemy_touch(
     mut commands: Commands,
     session: Res<GameSession>,

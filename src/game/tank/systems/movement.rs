@@ -1,23 +1,22 @@
 use bevy::prelude::*;
 
-use crate::common::input::input_for;
 use crate::game::model::{Collider, GameKind, GameSession};
 
 use super::super::components::*;
-use super::super::constants::TANK_SIZE;
+use super::super::constants::{ICE_COAST_TIME, TANK_SIZE, TILE};
 use super::super::geometry::{aabb_overlap, play_max, play_min};
-use super::super::resources::TankStage;
+use super::super::resources::{TankControls, TankStage};
 
 pub fn tank_movement(
     time: Res<Time>,
     session: Res<GameSession>,
     stage: Res<TankStage>,
-    keys: Res<ButtonInput<KeyCode>>,
+    controls: Res<TankControls>,
     mut tanks: Query<(
         Entity,
         &mut Transform,
         &TankDir,
-        &TankFC,
+        &mut TankFC,
         &Collider,
         Option<&PlayerTankFC>,
     )>,
@@ -28,6 +27,7 @@ pub fn tank_movement(
             Without<TankFC>,
         ),
     >,
+    ice: Query<&Transform, (With<IceFC>, Without<TankFC>)>,
 ) {
     if session.kind != GameKind::Tank || session.paused || session.finished {
         return;
@@ -42,10 +42,34 @@ pub fn tank_movement(
         .map(|(e, t, _, _, c, _)| (e, t.translation.truncate(), c.size))
         .collect();
 
-    for (self_entity, mut tf, dir, tank, _collider, player) in &mut tanks {
+    for (self_entity, mut tf, dir, mut tank, _collider, player) in &mut tanks {
+        tank.moving = false;
+        tank.hit_t = (tank.hit_t - delta).max(0.0);
         // 玩家：仅按住方向键时才推进
         let advance = if let Some(p) = player {
-            input_for(&keys, p.id).move_dir.length_squared() > 0.05
+            let input_held = controls.movement(p.id).length_squared() > 0.05;
+            let pos = tf.translation.truncate();
+            let on_ice = ice.iter().any(|ice_tf| {
+                aabb_overlap(
+                    pos,
+                    Vec2::splat(TANK_SIZE * 0.65),
+                    ice_tf.translation.truncate(),
+                    Vec2::splat(TILE),
+                )
+            });
+            if input_held {
+                if on_ice {
+                    tank.coast_left = ICE_COAST_TIME;
+                } else {
+                    tank.coast_left = (tank.coast_left - delta).max(0.0);
+                }
+                true
+            } else if tank.coast_left > 0.0 {
+                tank.coast_left = (tank.coast_left - delta).max(0.0);
+                true
+            } else {
+                false
+            }
         } else {
             // 敌人：被时钟冻结时停止移动
             stage.freeze_timer <= 0.0
@@ -84,8 +108,15 @@ pub fn tank_movement(
             }
         }
         if !blocked {
+            let moved = tf.translation.truncate().distance_squared(clamped) > 0.001;
             tf.translation.x = clamped.x;
             tf.translation.y = clamped.y;
+            tank.moving = moved;
+            if moved {
+                tank.motion_t += delta;
+            }
+        } else {
+            tank.coast_left = 0.0;
         }
     }
 }

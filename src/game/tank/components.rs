@@ -65,6 +65,10 @@ pub struct TankFC {
     pub bullets_alive: u8,
     pub hp: u8,
     pub shield_left: f32,
+    pub coast_left: f32,
+    pub hit_t: f32,
+    pub motion_t: f32,
+    pub moving: bool,
 }
 
 #[derive(Component)]
@@ -141,13 +145,29 @@ pub struct SpawnEffect {
 }
 
 #[derive(Component)]
-pub struct TankHud;
+pub struct TankHud {
+    pub kind: TankHudKind,
+}
 
 #[derive(Component)]
 pub struct P2Hud;
 
 #[derive(Component)]
 pub struct ModeSelectUi;
+
+#[derive(Component)]
+pub struct TankShieldVisual {
+    pub owner: Entity,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum TankHudKind {
+    Enemies,
+    P1Lives,
+    P2Lives,
+    Base,
+    Freeze,
+}
 
 #[cfg(test)]
 mod tests {

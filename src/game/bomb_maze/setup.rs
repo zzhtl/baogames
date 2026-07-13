@@ -11,11 +11,12 @@ use crate::game::model::{Collider, GameEntity};
 use super::components::*;
 use super::constants::*;
 use super::geometry::{in_safe_zone, is_border, is_pillar, tile_center};
-use super::resources::BMStage;
+use super::resources::{BMControls, BMStage};
 use super::sprites::*;
 
 // ========== 关卡建图 ==========
 pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
+    commands.insert_resource(BMControls::default());
     paint_field(commands);
 
     let mut rng = thread_rng();
@@ -376,25 +377,30 @@ pub fn spawn_bm_powerup(
 ) {
     let pos = tile_center(col, row);
     let bg = kind.color();
-    commands.spawn((
-        Sprite::from_color(bg, Vec2::splat(BM_TILE - 8.0)),
-        Transform::from_translation(pos.extend(Z_ITEM)),
-        BMPowerup { kind },
-        BMTilePos { col, row },
-        Collider {
-            size: Vec2::splat(BM_TILE - 8.0),
-        },
-        GameEntity,
-    ));
+    let parent = commands
+        .spawn((
+            Sprite::from_color(bg, Vec2::splat(BM_TILE - 8.0)),
+            Transform::from_translation(pos.extend(Z_ITEM)),
+            BMPowerup { kind },
+            BMTilePos { col, row },
+            Collider {
+                size: Vec2::splat(BM_TILE - 8.0),
+            },
+            GameEntity,
+        ))
+        .id();
     // 内框
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.1, 0.1, 0.12), Vec2::splat(BM_TILE - 14.0)),
-        Transform::from_translation(pos.extend(Z_ITEM + 0.05)),
-        GameEntity,
-    ));
+    commands
+        .spawn((
+            Sprite::from_color(Color::srgb(0.1, 0.1, 0.12), Vec2::splat(BM_TILE - 14.0)),
+            Transform::from_translation(Vec3::new(0.0, 0.0, 0.05)),
+            GameEntity,
+        ))
+        .insert(ChildOf(parent));
     // 标签字
-    text(commands, font, kind.label(), pos, 16.0, bg, GameEntity)
-        .insert(Transform::from_translation(pos.extend(Z_ITEM + 0.1)));
+    text(commands, font, kind.label(), Vec2::ZERO, 16.0, bg, GameEntity)
+        .insert(Transform::from_translation(Vec3::new(0.0, 0.0, 0.1)))
+        .insert(ChildOf(parent));
 }
 
 pub fn spawn_bm_exit(commands: &mut Commands, col: i32, row: i32) {
@@ -440,7 +446,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
     ];
     for (name, label_y, value, value_color, marker) in stats {
         hud_text(commands, font, hud_root, name, Vec2::new(hud_x, label_y), FONT_SMALL, label_color, ());
-        hud_text(commands, font, hud_root, &value, Vec2::new(hud_x, label_y - 22.0), FONT_HEADING, value_color, marker);
+        hud_text(commands, font, hud_root, &value, Vec2::new(hud_x, label_y - 29.0), FONT_HEADING, value_color, marker);
     }
 
     // P1 / P2 命数
@@ -454,10 +460,25 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
             font,
             hud_root,
             "x3",
-            Vec2::new(hud_x + dx, top_y - 312.0),
-            18.0,
+            Vec2::new(hud_x + dx, top_y - 318.0),
+            FONT_SMALL,
             Color::srgb(0.95, 0.95, 0.95),
             marker,
+        );
+        let power_marker = if matches!(marker, BMHud::P1Lives) {
+            BMHud::P1Power
+        } else {
+            BMHud::P2Power
+        };
+        hud_text(
+            commands,
+            font,
+            hud_root,
+            "弹1 火1",
+            Vec2::new(hud_x + dx, top_y - 348.0),
+            15.0,
+            color,
+            power_marker,
         );
     }
 

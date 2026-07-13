@@ -19,6 +19,7 @@ pub const BM_FLAME_LIFE: f32 = 0.55;
 pub const BM_PLACE_CD: f32 = 0.16;
 pub const BM_RESPAWN_TIME: f32 = 1.4;
 pub const BM_INVULN_TIME: f32 = 1.6;
+pub const BM_TURN_WINDOW: f32 = 5.0;
 
 pub const Z_FLOOR: f32 = -1.0;
 pub const Z_GRID: f32 = -0.8;

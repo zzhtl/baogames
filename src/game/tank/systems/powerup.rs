@@ -4,7 +4,7 @@ use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{Collider, GameKind, GameSession};
 
 use super::super::components::*;
-use super::super::constants::{PLAYER_BULLET_SPEED, POWERUP_SIZE};
+use super::super::constants::{PLAYER_BULLET_SPEED, POWERUP_SIZE, STAGE_TOTAL_ENEMIES};
 use super::super::geometry::aabb_overlap;
 use super::super::resources::TankStage;
 use super::super::setup::spawn_steel_at;
@@ -41,7 +41,7 @@ pub fn tank_powerup_pickup(
             }
         }
         let Some(id) = hit_id else { continue };
-        apply_powerup(
+        let bonus = apply_powerup(
             powerup.kind,
             id,
             &mut stage,
@@ -50,7 +50,7 @@ pub fn tank_powerup_pickup(
             &enemies,
             &bases,
         );
-        session.score += 500;
+        session.score += 500 + bonus;
         sfx.write(PlaySfx(SfxKind::Powerup));
         commands.entity(pe).despawn();
     }
@@ -64,7 +64,7 @@ fn apply_powerup(
     players: &mut PlayerQuery,
     enemies: &Query<Entity, With<EnemyTankFC>>,
     bases: &Query<&Transform, With<BaseFC>>,
-) {
+) -> u32 {
     match kind {
         PowerUpKind::Star => {
             for (_, mut tank, player, _) in players.iter_mut() {
@@ -82,9 +82,12 @@ fn apply_powerup(
             }
         }
         PowerUpKind::Grenade => {
+            let destroyed = enemies.iter().count() as u8;
             for e in enemies.iter() {
                 commands.entity(e).despawn();
             }
+            stage.kills = grenade_kill_total(stage.kills, destroyed);
+            return destroyed as u32 * 100;
         }
         PowerUpKind::Tank => {
             if player_id == 0 {
@@ -111,6 +114,11 @@ fn apply_powerup(
             }
         }
     }
+    0
+}
+
+fn grenade_kill_total(current: u8, destroyed: u8) -> u8 {
+    current.saturating_add(destroyed).min(STAGE_TOTAL_ENEMIES)
 }
 
 /// 冻结计时（时钟道具）：每帧递减，归零后敌人解冻。
@@ -120,5 +128,16 @@ pub fn tank_freeze_tick(time: Res<Time>, session: Res<GameSession>, mut stage: R
     }
     if stage.freeze_timer > 0.0 {
         stage.freeze_timer = (stage.freeze_timer - time.delta_secs()).max(0.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn grenade_counts_destroyed_enemies_toward_stage_clear() {
+        assert_eq!(grenade_kill_total(7, 4), 11);
+        assert_eq!(grenade_kill_total(19, 4), STAGE_TOTAL_ENEMIES);
     }
 }

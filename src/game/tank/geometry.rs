@@ -60,6 +60,28 @@ pub fn snap_perpendicular(t: &mut Vec3, dir: TankDir) {
     }
 }
 
+/// 仅在路口中心附近允许垂直转向；同轴反向可立即完成。
+/// 返回 true 表示可以切换方向，并在必要时把垂直轴吸附到路口中线。
+pub fn try_turn_at_lane(t: &mut Vec3, current: TankDir, wanted: TankDir, window: f32) -> bool {
+    if current == wanted || current.vec().dot(wanted.vec()).abs() > 0.5 {
+        return true;
+    }
+    let mut snapped = *t;
+    snap_perpendicular(&mut snapped, wanted);
+    let offset = match wanted {
+        TankDir::Up | TankDir::Down => snapped.x - t.x,
+        TankDir::Left | TankDir::Right => snapped.y - t.y,
+    };
+    if offset.abs() > window {
+        return false;
+    }
+    match wanted {
+        TankDir::Up | TankDir::Down => t.x = snapped.x,
+        TankDir::Left | TankDir::Right => t.y = snapped.y,
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +153,39 @@ mod tests {
         snap_perpendicular(&mut p, TankDir::Right);
         let expected = tile_center(0, 5).y;
         assert!((p.y - expected).abs() < 1e-3);
+    }
+
+    #[test]
+    fn perpendicular_turn_waits_for_the_lane_center() {
+        let center = tile_center(4, 4);
+        let mut near = Vec3::new(center.x, center.y + 4.0, 0.0);
+        assert!(try_turn_at_lane(
+            &mut near,
+            TankDir::Up,
+            TankDir::Right,
+            6.0
+        ));
+        assert!((near.y - center.y).abs() < 1e-3);
+
+        let mut far = Vec3::new(center.x, center.y + 12.0, 0.0);
+        assert!(!try_turn_at_lane(
+            &mut far,
+            TankDir::Up,
+            TankDir::Right,
+            6.0
+        ));
+        assert!((far.y - (center.y + 12.0)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn reversing_on_the_same_axis_is_immediate() {
+        let mut pos = Vec3::new(3.0, 7.0, 0.0);
+        assert!(try_turn_at_lane(
+            &mut pos,
+            TankDir::Up,
+            TankDir::Down,
+            0.0
+        ));
+        assert_eq!(pos, Vec3::new(3.0, 7.0, 0.0));
     }
 }

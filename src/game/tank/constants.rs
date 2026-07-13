@@ -19,6 +19,8 @@ pub const ENEMY_BULLET_SPEED: f32 = 220.0;
 pub const PLAYER_FIRE_CD: f32 = 0.25;
 pub const ENEMY_FIRE_CD: f32 = 1.4;
 pub const SPAWN_SHIELD_TIME: f32 = 2.0;
+pub const TURN_WINDOW: f32 = 6.0;
+pub const ICE_COAST_TIME: f32 = 0.28;
 
 pub const STAGE_TOTAL_ENEMIES: u8 = 20;
 pub const MAX_ALIVE_ENEMIES: u8 = 4;

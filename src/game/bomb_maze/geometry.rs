@@ -62,6 +62,26 @@ pub fn snap_perpendicular(t: &mut Vec3, dir: Dir4) {
     }
 }
 
+pub fn try_turn_at_tile(t: &mut Vec3, current: Dir4, wanted: Dir4, window: f32) -> bool {
+    if current == wanted || current.vec().dot(wanted.vec()).abs() > 0.5 {
+        return true;
+    }
+    let mut snapped = *t;
+    snap_perpendicular(&mut snapped, wanted);
+    let offset = match wanted {
+        Dir4::Up | Dir4::Down => snapped.x - t.x,
+        Dir4::Left | Dir4::Right => snapped.y - t.y,
+    };
+    if offset.abs() > window {
+        return false;
+    }
+    match wanted {
+        Dir4::Up | Dir4::Down => t.x = snapped.x,
+        Dir4::Left | Dir4::Right => t.y = snapped.y,
+    }
+    true
+}
+
 /// 在一组点中找到离 `from` 最近的那个。`points` 必须非空。
 pub fn nearest_point(points: &[Vec2], from: Vec2) -> Vec2 {
     let mut best = points[0];
@@ -149,5 +169,26 @@ mod tests {
         // 朝上下走时，x 应该被吸附；y 不动
         assert!((p.x - center.x).abs() < 1e-3);
         assert!((p.y - (center.y + 7.0)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn enemy_turn_waits_until_close_to_tile_center() {
+        let center = tile_center(3, 4);
+        let mut near = Vec3::new(center.x, center.y + 3.0, 0.0);
+        assert!(try_turn_at_tile(
+            &mut near,
+            Dir4::Up,
+            Dir4::Right,
+            super::super::constants::BM_TURN_WINDOW
+        ));
+        assert!((near.y - center.y).abs() < 1e-3);
+
+        let mut far = Vec3::new(center.x, center.y + 12.0, 0.0);
+        assert!(!try_turn_at_tile(
+            &mut far,
+            Dir4::Up,
+            Dir4::Right,
+            super::super::constants::BM_TURN_WINDOW
+        ));
     }
 }

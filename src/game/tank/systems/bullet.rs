@@ -7,7 +7,7 @@ use super::super::components::*;
 use super::super::constants::{BULLET_SIZE, RESPAWN_TIME, STAGE_TOTAL_ENEMIES};
 use super::super::geometry::{aabb_overlap, play_max, play_min};
 use super::super::resources::TankStage;
-use super::super::setup::{spawn_explosion, spawn_powerup};
+use super::super::setup::{spawn_destroyed_base, spawn_explosion, spawn_powerup};
 
 /// 掉落道具种类：按累计击杀数与关卡循环 6 种。
 fn powerup_for(kills: u8, stage_num: u8) -> PowerUpKind {
@@ -102,6 +102,7 @@ pub fn tank_bullet_update(
                 bullet_owner_release.push(owner);
             }
             spawn_explosion(&mut commands, pos, false);
+            sfx.write(PlaySfx(SfxKind::Deny));
             continue;
         }
 
@@ -109,6 +110,7 @@ pub fn tank_bullet_update(
         let mut hit_base = false;
         for (base_e, bt, bc) in &bases {
             if aabb_overlap(pos, bsize, bt.translation.truncate(), bc.size) {
+                spawn_destroyed_base(&mut commands, bt.translation.truncate());
                 commands.entity(base_e).despawn();
                 hit_base = true;
                 break;
@@ -157,19 +159,23 @@ pub fn tank_bullet_update(
                         bullet_owner_release.push(owner);
                     }
                     spawn_explosion(&mut commands, pos, false);
+                    sfx.write(PlaySfx(SfxKind::Deny));
                     continue;
                 }
+                let was_alive = victim_tank.hp > 0;
                 victim_tank.hp = victim_tank.hp.saturating_sub(1);
-                if victim_tank.hp == 0 {
+                victim_tank.hit_t = 0.12;
+                if was_alive && victim_tank.hp == 0 {
                     destroyed_tanks.push(victim);
+                } else {
+                    sfx.write(PlaySfx(SfxKind::Hit));
                 }
             }
             consumed.push(entity);
             if let Some(owner) = bullet.owner {
                 bullet_owner_release.push(owner);
             }
-            spawn_explosion(&mut commands, pos, true);
-            sfx.write(PlaySfx(SfxKind::Explosion));
+            spawn_explosion(&mut commands, pos, false);
         }
     }
 
@@ -184,6 +190,7 @@ pub fn tank_bullet_update(
             let pos = vt.translation.truncate();
             let was_player = vtank.side == TankSide::Player;
             spawn_explosion(&mut commands, pos, true);
+            sfx.write(PlaySfx(SfxKind::Explosion));
             commands.entity(victim).despawn();
             if was_player {
                 if let Ok(p) = players.get(victim) {
@@ -206,6 +213,67 @@ pub fn tank_bullet_update(
 
     if check_stage_completion(&mut session, &mut save, &stage) {
         save.store();
+    }
+}
+
+fn bullets_should_clash(a_side: TankSide, a_pos: Vec2, b_side: TankSide, b_pos: Vec2) -> bool {
+    a_side != b_side
+        && aabb_overlap(
+            a_pos,
+            Vec2::splat(BULLET_SIZE + 2.0),
+            b_pos,
+            Vec2::splat(BULLET_SIZE + 2.0),
+        )
+}
+
+pub fn tank_bullet_clash(
+    mut commands: Commands,
+    bullets: Query<(Entity, &Transform, &BulletFC)>,
+    mut owners: Query<&mut TankFC>,
+    mut sfx: MessageWriter<PlaySfx>,
+) {
+    let data: Vec<(Entity, Vec2, TankSide, Option<Entity>)> = bullets
+        .iter()
+        .map(|(entity, transform, bullet)| {
+            (
+                entity,
+                transform.translation.truncate(),
+                bullet.side,
+                bullet.owner,
+            )
+        })
+        .collect();
+    let mut consumed = Vec::new();
+    let mut released_owners = Vec::new();
+    for (i, &(a_entity, a_pos, a_side, a_owner)) in data.iter().enumerate() {
+        if consumed.contains(&a_entity) {
+            continue;
+        }
+        for &(b_entity, b_pos, b_side, b_owner) in &data[i + 1..] {
+            if consumed.contains(&b_entity)
+                || !bullets_should_clash(a_side, a_pos, b_side, b_pos)
+            {
+                continue;
+            }
+            consumed.extend([a_entity, b_entity]);
+            if let Some(owner) = a_owner {
+                released_owners.push(owner);
+            }
+            if let Some(owner) = b_owner {
+                released_owners.push(owner);
+            }
+            spawn_explosion(&mut commands, (a_pos + b_pos) * 0.5, false);
+            sfx.write(PlaySfx(SfxKind::Hit));
+            break;
+        }
+    }
+    for owner in released_owners {
+        if let Ok(mut tank) = owners.get_mut(owner) {
+            tank.bullets_alive = tank.bullets_alive.saturating_sub(1);
+        }
+    }
+    for entity in consumed {
+        commands.entity(entity).despawn();
     }
 }
 
@@ -450,5 +518,21 @@ mod tests {
         }
         // 跨关卡应能见到全部 6 种道具
         assert_eq!(seen.len(), 6);
+    }
+
+    #[test]
+    fn opposing_bullets_cancel_but_friendly_bullets_do_not() {
+        assert!(bullets_should_clash(
+            TankSide::Player,
+            Vec2::ZERO,
+            TankSide::Enemy,
+            Vec2::new(4.0, 0.0)
+        ));
+        assert!(!bullets_should_clash(
+            TankSide::Player,
+            Vec2::ZERO,
+            TankSide::Player,
+            Vec2::new(4.0, 0.0)
+        ));
     }
 }

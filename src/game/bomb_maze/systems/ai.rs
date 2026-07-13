@@ -6,8 +6,9 @@ use crate::game::model::{GameKind, GameSession};
 use super::super::components::*;
 use super::super::constants::{
     BM_COLS, BM_ENEMY_SIZE, BM_OFFSET_X, BM_OFFSET_Y, BM_PLAY_H, BM_PLAY_W, BM_ROWS,
+    BM_TURN_WINDOW,
 };
-use super::super::geometry::{nearest_point, snap_perpendicular, world_to_tile};
+use super::super::geometry::{nearest_point, try_turn_at_tile, world_to_tile};
 
 pub fn bm_enemy_ai(
     time: Res<Time>,
@@ -136,11 +137,19 @@ pub fn bm_enemy_ai(
                     new_dir = enemy.dir.opposite();
                 }
             }
-            enemy.dir = new_dir;
-            enemy.change_timer = rng.gen_range(0.9..2.4);
-
-            // 网格对齐：把垂直轴吸附到 tile 中心，避免卡墙
-            snap_perpendicular(&mut tf.translation, enemy.dir);
+            if new_dir == enemy.dir
+                || try_turn_at_tile(&mut tf.translation, enemy.dir, new_dir, BM_TURN_WINDOW)
+            {
+                enemy.dir = new_dir;
+                enemy.change_timer = rng.gen_range(0.9..2.4);
+            } else {
+                // 尚未走到路口中线，沿原方向继续靠近，避免提前瞬移到相邻格。
+                if !out {
+                    tf.translation.x = new_pos.x;
+                    tf.translation.y = new_pos.y;
+                }
+                enemy.change_timer = 0.12;
+            }
         } else {
             tf.translation.x = new_pos.x;
             tf.translation.y = new_pos.y;

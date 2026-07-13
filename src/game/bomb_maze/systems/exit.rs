@@ -203,18 +203,17 @@ mod tests {
 pub fn bm_player_blink(
     time: Res<Time>,
     session: Res<GameSession>,
-    mut players: Query<(&BMPlayer, &mut Sprite)>,
+    mut players: Query<(&BMPlayer, &mut Visibility)>,
 ) {
     if session.kind != GameKind::BombMaze {
         return;
     }
     let t = time.elapsed_secs();
-    for (player, mut sprite) in &mut players {
-        if player.invuln > 0.0 {
-            let pulse = ((t * 18.0).sin() * 0.5 + 0.5) as f32;
-            sprite.color = Color::srgba(0.95, 0.95, 0.98, 0.4 + 0.6 * pulse);
+    for (player, mut visibility) in &mut players {
+        if player.invuln > 0.0 && (t * 18.0).sin() < 0.0 {
+            *visibility = Visibility::Hidden;
         } else {
-            sprite.color = Color::srgb(0.95, 0.95, 0.98);
+            *visibility = Visibility::Inherited;
         }
     }
 }

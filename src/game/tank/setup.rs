@@ -10,7 +10,8 @@ use crate::game::model::{Collider, GameEntity, Lifetime, Velocity};
 use super::components::*;
 use super::constants::*;
 use super::geometry::{subtile_center, tile_center};
-use super::resources::TankStage;
+use super::palette::COLOR_BASE;
+use super::resources::{TankControls, TankStage};
 use super::sprites::{
     BASE_EAGLE, BRICK_SUBTILE, BUSH_TILE, ICE_TILE, PU_CLOCK, PU_GRENADE, PU_HELMET, PU_SHOVEL,
     PU_STAR, PU_TANK, STEEL_TILE, TANK_ENEMY_ARMOR, TANK_ENEMY_BASIC, TANK_ENEMY_FAST,
@@ -18,6 +19,7 @@ use super::sprites::{
 };
 
 pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
+    commands.insert_resource(TankControls::default());
     spawn_play_field(commands);
     spawn_map(commands, level);
     spawn_hud(commands, font, hud_root, level);
@@ -63,7 +65,7 @@ fn spawn_mode_select_ui(commands: &mut Commands, font: &UiFont) {
     text(
         commands,
         font,
-        "1  单人模式",
+        "动作一  单人模式",
         Vec2::new(cx, cy + 20.0),
         24.0,
         Color::srgb(0.85, 0.78, 0.36),
@@ -73,7 +75,7 @@ fn spawn_mode_select_ui(commands: &mut Commands, font: &UiFont) {
     text(
         commands,
         font,
-        "2  双人模式",
+        "动作二  双人模式",
         Vec2::new(cx, cy - 20.0),
         24.0,
         Color::srgb(0.46, 0.7, 0.95),
@@ -83,7 +85,7 @@ fn spawn_mode_select_ui(commands: &mut Commands, font: &UiFont) {
     text(
         commands,
         font,
-        "按 1 或 2 确认",
+        "按键可在系统设置中重映射",
         Vec2::new(cx, cy - 80.0),
         16.0,
         Color::srgb(0.75, 0.82, 0.92),
@@ -203,7 +205,9 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
         Vec2::new(hud_x, PLAY_OFFSET_Y + 20.0),
         26.0,
         Color::srgb(0.95, 0.6, 0.4),
-        TankHud,
+        TankHud {
+            kind: TankHudKind::Enemies,
+        },
     );
     hud_text(
         commands,
@@ -224,6 +228,57 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
         FONT_HEADING,
         Color::srgb(0.46, 0.7, 0.95),
         P2Hud,
+    );
+    hud_text(
+        commands,
+        font,
+        hud_root,
+        "×2",
+        Vec2::new(hud_x - 22.0, PLAY_OFFSET_Y - 92.0),
+        FONT_BODY,
+        Color::srgb(0.85, 0.78, 0.36),
+        TankHud {
+            kind: TankHudKind::P1Lives,
+        },
+    );
+    hud_text(
+        commands,
+        font,
+        hud_root,
+        "×2",
+        Vec2::new(hud_x + 22.0, PLAY_OFFSET_Y - 92.0),
+        FONT_BODY,
+        Color::srgb(0.46, 0.7, 0.95),
+        (
+            TankHud {
+                kind: TankHudKind::P2Lives,
+            },
+            P2Hud,
+        ),
+    );
+    hud_text(
+        commands,
+        font,
+        hud_root,
+        "BASE OK",
+        Vec2::new(hud_x, PLAY_OFFSET_Y - 142.0),
+        18.0,
+        Color::srgb(0.42, 0.86, 0.46),
+        TankHud {
+            kind: TankHudKind::Base,
+        },
+    );
+    hud_text(
+        commands,
+        font,
+        hud_root,
+        "",
+        Vec2::new(hud_x, PLAY_OFFSET_Y - 174.0),
+        17.0,
+        Color::srgb(0.72, 0.60, 1.0),
+        TankHud {
+            kind: TankHudKind::Freeze,
+        },
     );
 }
 
@@ -327,6 +382,26 @@ fn spawn_base(commands: &mut Commands, col: i32, row: i32) {
     attach_sprite_parts(commands, parent, &BASE_EAGLE, GameEntity);
 }
 
+pub fn spawn_destroyed_base(commands: &mut Commands, pos: Vec2) {
+    let parent = commands
+        .spawn((
+            Sprite::from_color(COLOR_BASE, Vec2::splat(28.0)),
+            Transform::from_translation(pos.extend(Z_BASE)),
+            GameEntity,
+        ))
+        .id();
+    for rotation in [0.78_f32, -0.78] {
+        commands
+            .spawn((
+                Sprite::from_color(Color::srgb(0.78, 0.20, 0.12), Vec2::new(24.0, 5.0)),
+                Transform::from_translation(Vec3::new(0.0, 0.0, 0.12))
+                    .with_rotation(Quat::from_rotation_z(rotation)),
+                GameEntity,
+            ))
+            .insert(ChildOf(parent));
+    }
+}
+
 // ========== 坦克与特效 ==========
 
 pub fn spawn_player_tank(commands: &mut Commands, id: usize, pos: Vec2) {
@@ -346,6 +421,10 @@ pub fn spawn_player_tank(commands: &mut Commands, id: usize, pos: Vec2) {
                 bullets_alive: 0,
                 hp: 1,
                 shield_left: SPAWN_SHIELD_TIME,
+                coast_left: 0.0,
+                hit_t: 0.0,
+                motion_t: 0.0,
+                moving: false,
             },
             TankDir::Up,
             PlayerTankFC { id },
@@ -355,6 +434,7 @@ pub fn spawn_player_tank(commands: &mut Commands, id: usize, pos: Vec2) {
         ))
         .id();
     attach_sprite_parts(commands, parent, def, GameEntity);
+    spawn_shield_visual(commands, parent);
 }
 
 pub fn spawn_enemy_tank(commands: &mut Commands, pos: Vec2, kind: EnemyTankKind) {
@@ -394,6 +474,10 @@ pub fn spawn_enemy_tank(commands: &mut Commands, pos: Vec2, kind: EnemyTankKind)
                 bullets_alive: 0,
                 hp,
                 shield_left: 0.0,
+                coast_left: 0.0,
+                hit_t: 0.0,
+                motion_t: 0.0,
+                moving: false,
             },
             TankDir::Down,
             EnemyTankFC {
@@ -406,6 +490,24 @@ pub fn spawn_enemy_tank(commands: &mut Commands, pos: Vec2, kind: EnemyTankKind)
         ))
         .id();
     attach_sprite_parts(commands, parent, def, GameEntity);
+}
+
+fn spawn_shield_visual(commands: &mut Commands, owner: Entity) {
+    for (offset, size) in [
+        (Vec2::new(0.0, 17.0), Vec2::new(30.0, 2.0)),
+        (Vec2::new(0.0, -17.0), Vec2::new(30.0, 2.0)),
+        (Vec2::new(17.0, 0.0), Vec2::new(2.0, 30.0)),
+        (Vec2::new(-17.0, 0.0), Vec2::new(2.0, 30.0)),
+    ] {
+        commands
+            .spawn((
+                Sprite::from_color(Color::srgba(0.42, 0.82, 1.0, 0.75), size),
+                Transform::from_translation(offset.extend(0.22)),
+                TankShieldVisual { owner },
+                GameEntity,
+            ))
+            .insert(ChildOf(owner));
+    }
 }
 
 pub fn spawn_spawn_effect(

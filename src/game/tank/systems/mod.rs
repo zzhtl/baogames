@@ -1,5 +1,6 @@
 mod ai;
 mod bullet;
+mod effects;
 mod hud;
 mod input;
 mod lifetime;
@@ -9,9 +10,10 @@ mod powerup;
 mod spawner;
 
 pub use ai::tank_enemy_ai;
-pub use bullet::tank_bullet_update;
+pub use bullet::{tank_bullet_clash, tank_bullet_update};
+pub use effects::{tank_motion_visual_update, tank_shield_visual_update};
 pub use hud::tank_hud_update;
-pub use input::tank_player_input;
+pub use input::{tank_player_input, tank_sample_input};
 pub use lifetime::tank_lifetime_tick;
 pub use mode_select::{tank_mode_select, tank_playing};
 pub use movement::tank_movement;

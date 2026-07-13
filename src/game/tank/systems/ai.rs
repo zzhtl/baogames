@@ -1,13 +1,14 @@
 use bevy::prelude::*;
 use rand::prelude::*;
 
+use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{Collider, GameKind, GameSession};
 
 use super::super::components::*;
-use super::super::constants::TANK_SIZE;
-use super::super::geometry::{aabb_overlap, play_max, play_min, snap_perpendicular};
+use super::super::constants::{TANK_SIZE, TURN_WINDOW};
+use super::super::geometry::{aabb_overlap, play_max, play_min, try_turn_at_lane};
 use super::super::resources::TankStage;
-use super::super::setup::spawn_bullet;
+use super::super::setup::{spawn_bullet, spawn_muzzle_flash};
 
 pub fn tank_enemy_ai(
     mut commands: Commands,
@@ -31,6 +32,7 @@ pub fn tank_enemy_ai(
             Without<TankFC>,
         ),
     >,
+    mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.kind != GameKind::Tank || session.paused || session.finished {
         return;
@@ -97,10 +99,11 @@ pub fn tank_enemy_ai(
                     break;
                 }
             }
-            if new_dir != *dir {
+            if new_dir != *dir
+                && try_turn_at_lane(&mut tf.translation, *dir, new_dir, TURN_WINDOW)
+            {
                 *dir = new_dir;
                 tf.rotation = Quat::from_rotation_z(new_dir.rotation());
-                snap_perpendicular(&mut tf.translation, new_dir);
             }
             ai.turn_timer = rng.gen_range(1.5..3.5);
         }
@@ -120,6 +123,8 @@ pub fn tank_enemy_ai(
                 1,
                 entity,
             );
+            spawn_muzzle_flash(&mut commands, muzzle, *dir);
+            sfx.write(PlaySfx(SfxKind::Shoot));
             tank.bullets_alive += 1;
             tank.fire_cd_left = tank.fire_cd;
         }
