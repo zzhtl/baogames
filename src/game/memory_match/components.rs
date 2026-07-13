@@ -13,6 +13,14 @@ pub struct MemoryCard {
     pub row: i32,
     pub pair_id: u32,
     pub state: CardState,
+    pub feedback: f32,
+}
+
+#[derive(Component)]
+pub struct CardFlip {
+    pub shown: CardState,
+    pub target: CardState,
+    pub progress: f32,
 }
 
 /// 卡背组节点（紫色面板 + 问号），FaceDown 时可见。

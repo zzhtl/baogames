@@ -1,15 +1,28 @@
 use bevy::prelude::*;
 
 use crate::common::audio::{PlaySfx, SfxKind};
+use crate::common::input::ActionState;
 use crate::common::render::set_text;
 use crate::game::model::{GameKind, GameSession, SaveData};
 
 use super::components::*;
 use super::constants::*;
-use super::resources::{SokobanStage, Tile};
+use super::resources::{MoveSnapshot, SokobanControls, SokobanStage, Tile};
+
+pub fn sokoban_sample_input(
+    actions: Res<ActionState>,
+    session: Res<GameSession>,
+    mut controls: ResMut<SokobanControls>,
+) {
+    if session.kind != GameKind::Sokoban || session.paused || session.finished {
+        controls.clear();
+        return;
+    }
+    controls.sample(&actions);
+}
 
 pub fn sokoban_input(
-    keys: Res<ButtonInput<KeyCode>>,
+    mut controls: ResMut<SokobanControls>,
     time: Res<Time>,
     session: Res<GameSession>,
     mut stage: ResMut<SokobanStage>,
@@ -26,53 +39,62 @@ pub fn sokoban_input(
     stage.move_cd = (stage.move_cd - dt).max(0.0);
 
     // 重来当前关
-    if keys.just_pressed(KeyCode::KeyR) {
+    if controls.take_reset() {
         stage.boxes = stage.initial_boxes.clone();
         stage.player = stage.initial_player;
         stage.moves = 0;
         stage.pushes = 0;
         stage.time_left = stage.initial_time;
         stage.move_cd = 0.0;
+        stage.history.clear();
         stage.message = "本关已重置".to_string();
         stage.message_clock = 1.2;
         sfx.write(PlaySfx(SfxKind::Flip));
         return;
     }
 
-    let just_pressed = keys.just_pressed(KeyCode::ArrowLeft)
-        || keys.just_pressed(KeyCode::ArrowRight)
-        || keys.just_pressed(KeyCode::ArrowUp)
-        || keys.just_pressed(KeyCode::ArrowDown)
-        || keys.just_pressed(KeyCode::KeyA)
-        || keys.just_pressed(KeyCode::KeyD)
-        || keys.just_pressed(KeyCode::KeyW)
-        || keys.just_pressed(KeyCode::KeyS);
-
-    let mut dir = (0i32, 0i32);
-    if keys.pressed(KeyCode::ArrowLeft) || keys.pressed(KeyCode::KeyA) {
-        dir.0 = -1;
-    } else if keys.pressed(KeyCode::ArrowRight) || keys.pressed(KeyCode::KeyD) {
-        dir.0 = 1;
-    } else if keys.pressed(KeyCode::ArrowUp) || keys.pressed(KeyCode::KeyW) {
-        dir.1 = -1;
-    } else if keys.pressed(KeyCode::ArrowDown) || keys.pressed(KeyCode::KeyS) {
-        dir.1 = 1;
-    }
-    if dir == (0, 0) {
-        return;
-    }
-    if !just_pressed && stage.move_cd > 0.0 {
+    if controls.take_undo() {
+        if undo_last(&mut stage) {
+            stage.move_cd = 0.0;
+            stage.message = "已撤销一步".to_string();
+            stage.message_clock = 0.8;
+            sfx.write(PlaySfx(SfxKind::Flip));
+        } else {
+            stage.message = "没有可撤销的步骤".to_string();
+            stage.message_clock = 0.8;
+            sfx.write(PlaySfx(SfxKind::Deny));
+        }
         return;
     }
 
+    let buffered = controls.take_step();
+    let immediate = buffered.is_some();
+    let Some(dir) = buffered.or_else(|| controls.held_dir()) else {
+        return;
+    };
+    if !immediate && stage.move_cd > 0.0 {
+        return;
+    }
+
+    let snapshot = MoveSnapshot {
+        boxes: stage.boxes.clone(),
+        player: stage.player,
+        moves: stage.moves,
+        pushes: stage.pushes,
+    };
     let pushes_before = stage.pushes;
     if try_move(&mut stage, dir) {
+        stage.history.push(snapshot);
         stage.move_cd = MOVE_COOLDOWN;
         if stage.pushes > pushes_before {
             // 被推箱子的新位置 = 玩家新位置 + dir
             let (bc, br) = (stage.player.0 + dir.0, stage.player.1 + dir.1);
             if stage.tile_at(bc, br) == Tile::Goal {
                 sfx.write(PlaySfx(SfxKind::Match));
+            } else if box_in_dead_corner(&stage, (bc, br)) {
+                stage.message = "箱子卡在死角，可用动作二撤销".to_string();
+                stage.message_clock = 1.8;
+                sfx.write(PlaySfx(SfxKind::Deny));
             } else {
                 sfx.write(PlaySfx(SfxKind::Place));
             }
@@ -82,7 +104,31 @@ pub fn sokoban_input(
     } else {
         // 撞墙时缩短冷却，长按时手感更跟手。
         stage.move_cd = MOVE_COOLDOWN * 0.5;
+        if immediate {
+            sfx.write(PlaySfx(SfxKind::Deny));
+        }
     }
+}
+
+pub fn undo_last(stage: &mut SokobanStage) -> bool {
+    let Some(snapshot) = stage.history.pop() else {
+        return false;
+    };
+    stage.boxes = snapshot.boxes;
+    stage.player = snapshot.player;
+    stage.moves = snapshot.moves;
+    stage.pushes = snapshot.pushes;
+    true
+}
+
+pub fn box_in_dead_corner(stage: &SokobanStage, position: (i32, i32)) -> bool {
+    if stage.tile_at(position.0, position.1) == Tile::Goal {
+        return false;
+    }
+    let wall = |dc: i32, dr: i32| {
+        stage.tile_at(position.0 + dc, position.1 + dr) == Tile::Wall
+    };
+    (wall(-1, 0) || wall(1, 0)) && (wall(0, -1) || wall(0, 1))
 }
 
 /// 尝试让玩家朝 dir 走一步。返回是否真的发生移动。抽出来便于单元测试。
@@ -114,6 +160,7 @@ pub fn try_move(stage: &mut SokobanStage, dir: (i32, i32)) -> bool {
 }
 
 pub fn sokoban_render_sync(
+    time: Res<Time>,
     session: Res<GameSession>,
     stage: Res<SokobanStage>,
     mut player_q: Query<&mut Transform, (With<SokoPlayer>, Without<SokoBox>)>,
@@ -122,16 +169,17 @@ pub fn sokoban_render_sync(
     if session.kind != GameKind::Sokoban {
         return;
     }
+    let blend = (time.delta_secs() * 22.0).min(1.0);
     if let Ok(mut t) = player_q.single_mut() {
         let c = stage.cell_center(stage.player.0, stage.player.1);
-        t.translation.x = c.x;
-        t.translation.y = c.y;
+        t.translation.x += (c.x - t.translation.x) * blend;
+        t.translation.y += (c.y - t.translation.y) * blend;
     }
     for (b, mut t) in &mut box_q {
         if let Some(&(c, r)) = stage.boxes.get(b.index) {
             let center = stage.cell_center(c, r);
-            t.translation.x = center.x;
-            t.translation.y = center.y;
+            t.translation.x += (center.x - t.translation.x) * blend;
+            t.translation.y += (center.y - t.translation.y) * blend;
         }
     }
 }
@@ -236,8 +284,15 @@ pub fn sokoban_hud_update(
         set_text(
             &mut t,
             &format!(
-                "剩余 {:>3.0}s   箱子 {}/{}   步数 {}   推箱 {}   分数 {}   纪录 {}",
-                stage.time_left, done, total, stage.moves, stage.pushes, session.score, high,
+                "剩余 {:>3.0}s   箱子 {}/{}   步数 {}   推箱 {}   撤销 {}   分数 {}   纪录 {}",
+                stage.time_left,
+                done,
+                total,
+                stage.moves,
+                stage.pushes,
+                stage.history.len(),
+                session.score,
+                high,
             ),
         );
     }

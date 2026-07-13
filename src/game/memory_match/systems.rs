@@ -1,15 +1,28 @@
 use bevy::prelude::*;
 
 use crate::common::audio::{PlaySfx, SfxKind};
+use crate::common::input::ActionState;
 use crate::common::render::set_text;
 use crate::game::model::{GameKind, GameSession, SaveData};
 
 use super::components::*;
 use super::constants::*;
-use super::resources::MemoryStage;
+use super::resources::{MemoryControls, MemoryStage};
+
+pub fn memory_sample_input(
+    actions: Res<ActionState>,
+    session: Res<GameSession>,
+    mut controls: ResMut<MemoryControls>,
+) {
+    if session.kind != GameKind::MemoryMatch || session.paused || session.finished {
+        controls.clear();
+        return;
+    }
+    controls.sample(&actions);
+}
 
 pub fn memory_input(
-    keys: Res<ButtonInput<KeyCode>>,
+    mut controls: ResMut<MemoryControls>,
     time: Res<Time>,
     mut session: ResMut<GameSession>,
     mut stage: ResMut<MemoryStage>,
@@ -23,6 +36,16 @@ pub fn memory_input(
 
     if stage.message_clock > 0.0 {
         stage.message_clock = (stage.message_clock - dt).max(0.0);
+    }
+    if stage.preview_timer > 0.0 {
+        stage.preview_timer = (stage.preview_timer - dt).max(0.0);
+        controls.take_move();
+        controls.take_flip();
+        if stage.preview_timer <= 0.0 {
+            stage.message = "开始配对！".to_string();
+            stage.message_clock = 0.9;
+        }
+        return;
     }
     stage.time_left = (stage.time_left - dt).max(0.0);
 
@@ -48,15 +71,24 @@ pub fn memory_input(
                     } else {
                         CardState::FaceDown
                     };
+                    card.feedback = if matched { 0.34 } else { -0.34 };
                 }
             }
             if matched {
                 stage.pairs_done += 1;
-                session.score += 10;
-                stage.message = "配对成功！".to_string();
+                stage.combo_streak = stage.combo_streak.saturating_add(1).min(9);
+                stage.best_combo = stage.best_combo.max(stage.combo_streak);
+                let points = match_score(stage.combo_streak);
+                session.score += points;
+                stage.message = if stage.combo_streak > 1 {
+                    format!("{} 连对 · +{}", stage.combo_streak, points)
+                } else {
+                    format!("配对成功 · +{}", points)
+                };
                 stage.message_clock = 1.0;
                 sfx.write(PlaySfx(SfxKind::Match));
             } else {
+                stage.combo_streak = 0;
                 stage.message = "不一样，再想想～".to_string();
                 stage.message_clock = 1.0;
                 sfx.write(PlaySfx(SfxKind::Deny));
@@ -68,20 +100,9 @@ pub fn memory_input(
     }
 
     // 光标移动
-    let mut col = stage.cursor_col;
-    let mut row = stage.cursor_row;
-    if keys.just_pressed(KeyCode::ArrowLeft) || keys.just_pressed(KeyCode::KeyA) {
-        col -= 1;
-    }
-    if keys.just_pressed(KeyCode::ArrowRight) || keys.just_pressed(KeyCode::KeyD) {
-        col += 1;
-    }
-    if keys.just_pressed(KeyCode::ArrowUp) || keys.just_pressed(KeyCode::KeyW) {
-        row -= 1;
-    }
-    if keys.just_pressed(KeyCode::ArrowDown) || keys.just_pressed(KeyCode::KeyS) {
-        row += 1;
-    }
+    let (dc, dr) = controls.take_move().unwrap_or((0, 0));
+    let col = stage.cursor_col + dc;
+    let row = stage.cursor_row + dr;
     let (prev_col, prev_row) = (stage.cursor_col, stage.cursor_row);
     stage.cursor_col = col.clamp(0, stage.cols as i32 - 1);
     stage.cursor_row = row.clamp(0, stage.rows as i32 - 1);
@@ -89,14 +110,12 @@ pub fn memory_input(
         sfx.write(PlaySfx(SfxKind::MenuMove));
     }
 
+    let pressed = controls.take_flip();
     // 等待对比期间禁止翻牌
     if stage.second_pick.is_some() {
         return;
     }
 
-    let pressed = keys.just_pressed(KeyCode::Space)
-        || keys.just_pressed(KeyCode::Enter)
-        || keys.just_pressed(KeyCode::KeyJ);
     if !pressed {
         return;
     }
@@ -112,6 +131,7 @@ pub fn memory_input(
         }
     }
     let Some(target) = target else {
+        sfx.write(PlaySfx(SfxKind::Deny));
         return;
     };
     // 不能翻自己（同一张已经作为 first_pick 翻起来了；FaceDown 过滤已经规避了）
@@ -133,10 +153,14 @@ pub fn memory_input(
     }
 }
 
+pub fn match_score(streak: u8) -> u32 {
+    10 + streak.saturating_sub(1) as u32 * 5
+}
+
 #[allow(clippy::type_complexity)]
 pub fn memory_render_sync(
     session: Res<GameSession>,
-    card_q: Query<(&MemoryCard, &Children)>,
+    card_q: Query<(&CardFlip, &Children)>,
     mut back_q: Query<
         &mut Visibility,
         (With<CardBack>, Without<CardFace>, Without<CardFaceMatched>),
@@ -164,34 +188,89 @@ pub fn memory_render_sync(
             *v = target;
         }
     };
-    for (card, children) in &card_q {
+    for (flip, children) in &card_q {
         for c in children {
             let child = *c;
             if let Ok(mut v) = back_q.get_mut(child) {
-                apply(&mut v, card.state == CardState::FaceDown);
+                apply(&mut v, flip.shown == CardState::FaceDown);
             }
             if let Ok(mut v) = face_q.get_mut(child) {
-                apply(&mut v, card.state == CardState::FaceUp);
+                apply(&mut v, flip.shown == CardState::FaceUp);
             }
             if let Ok(mut v) = matched_q.get_mut(child) {
-                apply(&mut v, card.state == CardState::Matched);
+                apply(&mut v, flip.shown == CardState::Matched);
             }
         }
     }
 }
 
-pub fn memory_cursor_follow(
+pub fn memory_card_flip_update(
+    time: Res<Time>,
     session: Res<GameSession>,
     stage: Res<MemoryStage>,
-    mut q: Query<(&CardCursor, &mut Transform)>,
+    mut cards: Query<(&mut MemoryCard, &mut CardFlip, &mut Transform)>,
+) {
+    if session.kind != GameKind::MemoryMatch {
+        return;
+    }
+    let dt = time.delta_secs();
+    for (mut card, mut flip, mut transform) in &mut cards {
+        let desired = if stage.preview_timer > 0.0 {
+            CardState::FaceUp
+        } else {
+            card.state
+        };
+        if flip.target != desired {
+            flip.target = desired;
+            flip.progress = 0.0;
+        }
+        if flip.progress < 1.0 {
+            flip.progress = (flip.progress + dt / CARD_FLIP_TIME).min(1.0);
+            if flip.progress >= 0.5 {
+                flip.shown = flip.target;
+            }
+        }
+        let flip_scale = if flip.progress < 1.0 {
+            (flip.progress * std::f32::consts::PI).cos().abs()
+        } else {
+            1.0
+        };
+        let mut y_scale = 1.0;
+        let mut rotation = 0.0;
+        if card.feedback != 0.0 {
+            let positive = card.feedback > 0.0;
+            let left = card.feedback.abs();
+            let phase = (0.34 - left) * 42.0;
+            if positive {
+                y_scale += phase.sin().max(0.0) * 0.08;
+                card.feedback = (card.feedback - dt).max(0.0);
+            } else {
+                rotation = phase.sin() * 0.055;
+                card.feedback = (card.feedback + dt).min(0.0);
+            }
+        }
+        transform.scale = Vec3::new(flip_scale.max(0.04), y_scale, 1.0);
+        transform.rotation = Quat::from_rotation_z(rotation);
+    }
+}
+
+pub fn memory_cursor_follow(
+    time: Res<Time>,
+    session: Res<GameSession>,
+    stage: Res<MemoryStage>,
+    mut q: Query<(&CardCursor, &mut Transform, &mut Sprite)>,
 ) {
     if session.kind != GameKind::MemoryMatch {
         return;
     }
     let center = stage.cell_center(stage.cursor_col, stage.cursor_row);
-    for (cursor, mut t) in &mut q {
-        t.translation.x = center.x + cursor.offset.x;
-        t.translation.y = center.y + cursor.offset.y;
+    let blend = (time.delta_secs() * 24.0).min(1.0);
+    let pulse = 0.88 + (time.elapsed_secs() * 7.0).sin() * 0.12;
+    for (cursor, mut t, mut sprite) in &mut q {
+        let target = center + cursor.offset;
+        t.translation.x += (target.x - t.translation.x) * blend;
+        t.translation.y += (target.y - t.translation.y) * blend;
+        sprite.color = COLOR_CURSOR.with_alpha(pulse);
     }
 }
 
@@ -253,8 +332,15 @@ pub fn memory_hud_update(
         set_text(
             &mut t,
             &format!(
-                "剩余时间 {:>3.0}s   配对 {}/{}   翻牌 {}   分数 {}   纪录 {}",
-                stage.time_left, stage.pairs_done, stage.pairs_total, stage.flips, session.score, high,
+                "剩余时间 {:>3.0}s   配对 {}/{}   连对 x{}   最佳 x{}   翻牌 {}   分数 {}   纪录 {}",
+                stage.time_left,
+                stage.pairs_done,
+                stage.pairs_total,
+                stage.combo_streak,
+                stage.best_combo,
+                stage.flips,
+                session.score,
+                high,
             ),
         );
     }

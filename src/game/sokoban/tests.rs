@@ -1,7 +1,8 @@
 use super::constants::{LEVEL_TIME, LEVELS};
 use super::resources::{SokobanStage, Tile};
 use super::setup::parse_level;
-use super::systems::try_move;
+use super::resources::MoveSnapshot;
+use super::systems::{box_in_dead_corner, try_move, undo_last};
 use bevy::prelude::*;
 
 fn make_stage(lines: &[&str]) -> SokobanStage {
@@ -23,6 +24,7 @@ fn make_stage(lines: &[&str]) -> SokobanStage {
         move_cd: 0.0,
         message: String::new(),
         message_clock: 0.0,
+        history: Vec::new(),
     }
 }
 
@@ -116,4 +118,31 @@ fn cannot_push_box_into_wall() {
     let mut s = make_stage(&lines);
     assert!(!try_move(&mut s, (1, 0)));
     assert_eq!(s.pushes, 0);
+}
+
+#[test]
+fn undo_restores_player_box_and_counters() {
+    let lines = ["#####", "#@$.#", "#####"];
+    let mut stage = make_stage(&lines);
+    stage.history.push(MoveSnapshot {
+        boxes: stage.boxes.clone(),
+        player: stage.player,
+        moves: stage.moves,
+        pushes: stage.pushes,
+    });
+    assert!(try_move(&mut stage, (1, 0)));
+    assert!(stage.all_boxes_done());
+    assert!(undo_last(&mut stage));
+    assert_eq!(stage.player, (1, 1));
+    assert_eq!(stage.boxes, vec![(2, 1)]);
+    assert_eq!(stage.moves, 0);
+    assert_eq!(stage.pushes, 0);
+}
+
+#[test]
+fn non_goal_wall_corner_is_reported_as_dead() {
+    let lines = ["#####", "# $@#", "#  .#", "#####"];
+    let stage = make_stage(&lines);
+    assert!(box_in_dead_corner(&stage, (1, 1)));
+    assert!(!box_in_dead_corner(&stage, (3, 2)), "目标格不是死角");
 }

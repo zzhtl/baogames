@@ -1,5 +1,6 @@
 use super::constants::{LEVEL_GRID, LEVEL_TIME, PAIR_CHARS};
 use super::setup::shuffled_pair_ids;
+use super::systems::match_score;
 
 #[test]
 fn level_grids_have_even_cells_and_enough_chars() {
@@ -34,4 +35,11 @@ fn shuffled_pair_ids_balanced() {
         let count = ids.iter().filter(|&&v| v == pid).count();
         assert_eq!(count, 2, "pair_id {} appears {} times", pid, count);
     }
+}
+
+#[test]
+fn consecutive_matches_gain_a_small_streak_bonus() {
+    assert_eq!(match_score(1), 10);
+    assert_eq!(match_score(2), 15);
+    assert_eq!(match_score(4), 25);
 }

@@ -7,12 +7,13 @@ use crate::game::model::GameEntity;
 
 use super::components::*;
 use super::constants::*;
-use super::resources::{SokobanStage, Tile};
+use super::resources::{SokobanControls, SokobanStage, Tile};
 use super::sprites::{
     BOX_DONE, BOX_WOOD, FLOOR_TILE, GOAL_TILE, SOKO_PLAYER, TILE_CANONICAL, WALL_TILE,
 };
 
 pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
+    commands.insert_resource(SokobanControls::default());
     let idx = (level.clamp(1, 10) - 1) as usize;
     let lines = LEVELS[idx];
     let (cols, rows, tiles, boxes, player) = parse_level(lines);
@@ -71,6 +72,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, lev
         move_cd: 0.0,
         message: format!("第 {} 关 - 把所有箱子推到目标点！", level),
         message_clock: 2.4,
+        history: Vec::new(),
     });
 }
 
@@ -198,7 +200,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
         commands,
         hud_root,
         Vec2::new(0.0, hud_y),
-        Vec2::new(900.0, 50.0),
+        Vec2::new(700.0, 50.0),
         Color::srgb(0.10, 0.13, 0.20),
         Color::srgb(0.86, 0.62, 0.32),
     );
@@ -207,7 +209,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
         font,
         hud_root,
         &format!("推箱子 · 第 {} 关", level),
-        Vec2::new(-350.0, hud_y),
+        Vec2::new(-220.0, hud_y),
         FONT_HEADING,
         Color::srgb(1.0, 0.92, 0.72),
         (),
@@ -218,7 +220,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
         hud_root,
         "",
         Vec2::new(160.0, hud_y),
-        15.0,
+        FONT_SMALL,
         Color::srgb(0.92, 0.96, 1.0),
         SokobanHud,
     );
@@ -227,7 +229,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
         commands,
         hud_root,
         Vec2::new(0.0, -230.0),
-        Vec2::new(900.0, 50.0),
+        Vec2::new(700.0, 50.0),
         Color::srgb(0.08, 0.10, 0.15),
         Color::srgb(0.96, 0.72, 0.32),
     );
@@ -235,8 +237,8 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
         commands,
         font,
         hud_root,
-        "方向键 / WASD 推箱子，R 重来 · Esc 暂停 · Backspace 返回菜单",
-        Vec2::new(-330.0, -230.0),
+        "方向移动 · 动作二撤销 · 重置键重来 · 开始键暂停",
+        Vec2::new(-70.0, -230.0),
         FONT_SMALL,
         Color::srgb(0.86, 0.92, 1.0),
         (),
@@ -246,8 +248,8 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
         font,
         hud_root,
         "",
-        Vec2::new(280.0, -230.0),
-        18.0,
+        Vec2::new(270.0, -230.0),
+        FONT_SMALL,
         Color::srgb(1.0, 0.86, 0.42),
         SokobanMessage,
     );

@@ -29,6 +29,8 @@ pub const CARD_GAP_RATIO: f32 = 0.16;
 
 // 翻错牌后停留时间。
 pub const PEEK_TIME: f32 = 0.8;
+pub const PREVIEW_TIME: f32 = 1.8;
+pub const CARD_FLIP_TIME: f32 = 0.18;
 
 // 字符库（最多支持 24 对）。
 pub const PAIR_CHARS: [&str; 24] = [

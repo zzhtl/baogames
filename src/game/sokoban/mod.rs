@@ -15,7 +15,7 @@ pub(super) use resources::SokobanStage;
 pub(super) use setup::setup_stage;
 pub(super) use systems::{
     sokoban_box_visual_sync, sokoban_check_finish, sokoban_hud_update, sokoban_input,
-    sokoban_render_sync,
+    sokoban_render_sync, sokoban_sample_input,
 };
 
 #[cfg(test)]
