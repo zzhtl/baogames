@@ -18,7 +18,7 @@ set -euo pipefail
 APP_NAME="BaoGames"
 BIN_NAME="baogames"
 BUNDLE_ID="com.baogames.app"
-VERSION="0.1.0"
+VERSION="${VERSION:-0.1.0}"   # CI 用标签覆盖
 MIN_MACOS="10.13"
 
 # ---- 默认参数 ----

@@ -1,0 +1,150 @@
+# BaoGames · 发版流水线
+#
+# 触发：推送 v* 标签（scripts/release.sh 会代劳），或手动 workflow_dispatch。
+# 产物：linux tar.gz / windows zip / macOS(Apple Silicon) .app zip + .dmg，
+#       打标签触发时自动汇总成一个 GitHub Release；手动触发只留 artifacts。
+#
+# 字体已 include_bytes! 内嵌，二进制自包含，包里不需要带 assets。
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: baogames
+  # 手动触发时 GITHUB_REF_NAME 是分支名，产物会带分支名而非版本号，仅供自测。
+  # 打 tag 触发时为 v0.2.0 这类值。
+
+jobs:
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # bevy 0.18 在 Linux 上链接 alsa 与 libudev，runner 镜像不预装开发头文件。
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 构建
+        run: cargo build --release --locked --bin "$BIN_NAME"
+
+      - name: 打包
+        run: |
+          set -euo pipefail
+          pkg="baogames-${GITHUB_REF_NAME#v}-linux-x86_64"
+          mkdir -p "dist/$pkg"
+          cp "target/release/$BIN_NAME" README.md "dist/$pkg/"
+          tar -C dist -czf "dist/$pkg.tar.gz" "$pkg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: Windows x86_64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 构建
+        run: cargo build --release --locked --bin baogames
+
+      - name: 打包
+        shell: pwsh
+        run: |
+          $ver = "${env:GITHUB_REF_NAME}" -replace '^v', ''
+          $pkg = "baogames-$ver-windows-x86_64"
+          New-Item -ItemType Directory -Force -Path "dist/$pkg" | Out-Null
+          Copy-Item "target/release/baogames.exe" "dist/$pkg/"
+          Copy-Item "README.md" "dist/$pkg/"
+          Compress-Archive -Path "dist/$pkg" -DestinationPath "dist/$pkg.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: dist/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS arm64
+    # 只支持 Apple 芯片（M 系列），不出 Intel/universal 包。
+    # macos-latest 本身就是 arm64 runner，原生编译。
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 构建 .app 与 .dmg
+        run: |
+          set -euo pipefail
+          # Info.plist 的版本号只接受数字点分格式，手动触发（分支名）时退回 0.0.0。
+          v="${GITHUB_REF_NAME#v}"
+          [[ "$v" =~ ^[0-9]+(\.[0-9]+)*$ ]] || v="0.0.0"
+          VERSION="$v" bash scripts/build-macos.sh --target aarch64-apple-darwin --dmg
+
+      - name: 打包
+        run: |
+          set -euo pipefail
+          pkg="baogames-${GITHUB_REF_NAME#v}-macos-arm64"
+          # zip 会丢可执行位与符号链接，.app 必须用 ditto 归档。
+          ditto -c -k --keepParent dist/BaoGames.app "dist/$pkg.zip"
+          mv dist/BaoGames.dmg "dist/$pkg.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: |
+            dist/*.zip
+            dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: 发布 GitHub Release
+    needs: [linux, windows, macos]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # --generate-notes 要比对上一个 tag，需要完整历史。
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 汇总校验和并发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd dist
+          # 先固定文件列表，避免 SHA256SUMS 把自己算进去。
+          files=(*)
+          sha256sum "${files[@]}" > SHA256SUMS
+          ls -lh
+          gh release create "$GITHUB_REF_NAME" ./* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "BaoGames $GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
