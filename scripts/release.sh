@@ -47,11 +47,11 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 fi
 
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-  echo "本地已存在 tag $TAG。" >&2
+  echo "本地已存在 tag ${TAG}。" >&2
   exit 1
 fi
 if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-  echo "远端已存在 tag $TAG。" >&2
+  echo "远端已存在 tag ${TAG}。" >&2
   exit 1
 fi
 
@@ -97,7 +97,7 @@ git push origin "$BRANCH"
 git push origin "$TAG"
 
 echo ""
-echo "✅ 已推送 $TAG，CI 开始构建三平台产物："
+echo "✅ 已推送 ${TAG}，CI 开始构建三平台产物："
 REPO_URL="$(git remote get-url origin)"
 REPO_PATH="${REPO_URL#*github.com[:/]}"
 echo "   https://github.com/${REPO_PATH%.git}/actions"

@@ -100,7 +100,7 @@ if [[ -f "$ICON_SRC" ]]; then
   iconutil -c icns "$ICONSET" -o "$RES_DIR/AppIcon.icns"
   ICON_REF="<key>CFBundleIconFile</key><string>AppIcon</string>"
 else
-  echo "ℹ️  未找到 $ICON_SRC，使用系统默认图标（可后补 1024×1024 PNG 到该路径再打包）。"
+  echo "ℹ️  未找到 ${ICON_SRC}，使用系统默认图标（可后补 1024×1024 PNG 到该路径再打包）。"
 fi
 
 # ---- Info.plist ----

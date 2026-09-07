@@ -29,11 +29,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # bevy 0.18 在 Linux 上链接 alsa 与 libudev，runner 镜像不预装开发头文件。
+      # bevy 0.18 在 Linux 上要 alsa、libudev，wayland-sys 还要 wayland-client.pc，
+      # runner 镜像都不预装。
       - name: 安装系统依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
 
       - uses: Swatinem/rust-cache@v2
 
