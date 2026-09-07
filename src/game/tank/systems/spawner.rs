@@ -4,9 +4,9 @@ use crate::game::model::{GameKind, GameSession};
 
 use super::super::components::*;
 use super::super::constants::{
-    ENEMY_SPAWN_COLS, MAX_ALIVE_ENEMIES, PLAYER1_SPAWN, PLAYER2_SPAWN, RESPAWN_TIME, SPAWN_INTERVAL,
+    ENEMY_SPAWN_COLS, MAX_ALIVE_ENEMIES, PLAYER1_SPAWN, PLAYER2_SPAWN, RESPAWN_TIME, SPAWN_INTERVAL, TANK_SIZE,
 };
-use super::super::geometry::tile_center;
+use super::super::geometry::{aabb_overlap, tile_center};
 use super::super::resources::TankStage;
 use super::super::setup::{spawn_enemy_tank, spawn_player_tank, spawn_spawn_effect};
 
@@ -47,10 +47,12 @@ pub fn tank_spawn_effect(
     time: Res<Time>,
     session: Res<GameSession>,
     mut effects: Query<(Entity, &mut SpawnEffect, &mut Sprite)>,
+    tanks: Query<&Transform, With<TankFC>>,
 ) {
     if session.kind != GameKind::Tank || session.paused || session.finished {
         return;
     }
+    let occupied: Vec<Vec2> = tanks.iter().map(|t| t.translation.truncate()).collect();
     for (entity, mut effect, mut sprite) in &mut effects {
         effect.timer.tick(time.delta());
         let t = effect.timer.fraction();
@@ -59,6 +61,13 @@ pub fn tank_spawn_effect(
         sprite.color = Color::srgb(0.8 + 0.2 * pulse, 0.9, 1.0);
         if effect.timer.just_finished() {
             let pos = effect.spawn_pos;
+            // 出生点被别的坦克占着就再等一轮：两台坦克重叠会互为阻挡物，
+            // 双方都动不了且没有自愈路径。
+            let size = Vec2::splat(TANK_SIZE - 2.0);
+            if occupied.iter().any(|p| aabb_overlap(pos, size, *p, size)) {
+                effect.timer.reset();
+                continue;
+            }
             let side = effect.side;
             let player_id = effect.player_id;
             commands.entity(entity).despawn();

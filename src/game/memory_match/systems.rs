@@ -321,33 +321,37 @@ pub fn memory_hud_update(
     session: Res<GameSession>,
     save: Res<SaveData>,
     stage: Res<MemoryStage>,
-    mut hud: Query<&mut Text2d, (With<MemoryHud>, Without<MemoryMessage>)>,
-    mut msg: Query<&mut Text2d, (With<MemoryMessage>, Without<MemoryHud>)>,
+    mut hud: Query<&mut Text2d, (With<MemoryHud>, Without<MemoryMessage>, Without<MemoryScoreHud>)>,
+    mut score_hud: Query<&mut Text2d, (With<MemoryScoreHud>, Without<MemoryMessage>, Without<MemoryHud>)>,
+    mut msg: Query<&mut Text2d, (With<MemoryMessage>, Without<MemoryHud>, Without<MemoryScoreHud>)>,
 ) {
     if session.kind != GameKind::MemoryMatch {
         return;
     }
+    let high = save.high_scores[GameKind::MemoryMatch.index()].max(session.score);
+    // 顶栏右侧只放当前进度，分数与纪录挪到底栏——240 像素宽的画布放不下一整行
     if let Ok(mut t) = hud.single_mut() {
-        let high = save.high_scores[GameKind::MemoryMatch.index()].max(session.score);
         set_text(
             &mut t,
             &format!(
-                "剩余时间 {:>3.0}s   配对 {}/{}   连对 x{}   最佳 x{}   翻牌 {}   分数 {}   纪录 {}",
-                stage.time_left,
+                "第{}关  时间 {:.0}  配对 {}/{}",
+                session.level,
+                stage.time_left.max(0.0),
                 stage.pairs_done,
                 stage.pairs_total,
-                stage.combo_streak,
-                stage.best_combo,
-                stage.flips,
-                session.score,
-                high,
             ),
         );
     }
+    if let Ok(mut t) = score_hud.single_mut() {
+        set_text(&mut t, &format!("分数 {}  纪录 {}  翻牌 {}", session.score, high, stage.flips));
+    }
     // 暂停/结束由统一覆盖层显示，这里只放玩法瞬时消息
     if let Ok(mut t) = msg.single_mut() {
+        let combo = format!("连对 x{}", stage.combo_streak);
         let value = if stage.message_clock > 0.0 && !session.finished {
             stage.message.as_str()
+        } else if stage.combo_streak > 0 {
+            combo.as_str()
         } else {
             ""
         };

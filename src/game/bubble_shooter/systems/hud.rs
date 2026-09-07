@@ -34,7 +34,7 @@ pub fn bubble_hud_update(
         set_text(
             &mut t,
             &format!(
-                "分数 {}\n纪录 {}\n第 {} 关\n剩余 {} 颗\n连消 x{}\n{} 步后下移",
+                "分数 {}\n纪录 {}\n第 {} 关\n剩余 {}\n连消 x{}\n下移 {} 步",
                 session.score,
                 high,
                 session.level,

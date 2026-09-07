@@ -1,11 +1,12 @@
 use bevy::prelude::*;
 
 use crate::common::audio::{PlaySfx, SfxKind};
+use crate::common::collide::{Solid as Solid_, resolve};
 use crate::game::model::GameSession;
 
 use super::super::components::*;
 use super::super::constants::*;
-use super::super::geometry::{aabb_overlap, level_world_max_x};
+use super::super::geometry::level_world_max_x;
 use super::super::setup_actors::spawn_brick_shards;
 
 pub fn mario_physics(
@@ -13,7 +14,7 @@ pub fn mario_physics(
     mut commands: Commands,
     mut session: ResMut<GameSession>,
     mut player_q: Query<(&mut MarioPlayer, &mut Transform), Without<Solid>>,
-    solid_q: Query<(Entity, &Transform, &Solid), Without<MarioPlayer>>,
+    solid_q: Query<(Entity, &Transform, &Solid, Option<&MovingPlatform>), Without<MarioPlayer>>,
     brick_q: Query<&BrickTile>,
     mut question_q: Query<&mut QuestionBlock>,
     mut sfx: MessageWriter<PlaySfx>,
@@ -38,40 +39,15 @@ pub fn mario_physics(
         v.x = WALK_SPEED * 0.7;
         v.y -= GRAVITY * dt;
         v.y = v.y.max(-FALL_MAX);
-        let mut np = tr.translation.truncate() + v * dt;
-        let p_size = player.state.size();
-        let mut on_ground = false;
-        for (_e, st, s) in &solid_q {
-            let sp = st.translation.truncate();
-            if aabb_overlap(np, p_size, sp, s.size) {
-                let dx = np.x - sp.x;
-                let dy = np.y - sp.y;
-                let px = (p_size.x + s.size.x) * 0.5 - dx.abs();
-                let py = (p_size.y + s.size.y) * 0.5 - dy.abs();
-                if px > 0.0 && py > 0.0 {
-                    if py < px {
-                        if dy > 0.0 {
-                            np.y += py;
-                            v.y = 0.0;
-                            on_ground = true;
-                        } else {
-                            np.y -= py;
-                            v.y = 0.0;
-                        }
-                    } else if dx > 0.0 {
-                        np.x += px;
-                        v.x = 0.0;
-                    } else {
-                        np.x -= px;
-                        v.x = 0.0;
-                    }
-                }
-            }
-        }
-        tr.translation.x = np.x;
-        tr.translation.y = np.y;
-        player.vel = v;
-        player.on_ground = on_ground;
+        let shapes: Vec<Solid_> = solid_q
+            .iter()
+            .map(|(_, st, s, _)| Solid_::fixed(st.translation.truncate(), s.size))
+            .collect();
+        let r = resolve(tr.translation.truncate(), player.state.size(), v, dt, &shapes);
+        tr.translation.x = r.pos.x;
+        tr.translation.y = r.pos.y;
+        player.vel = r.vel;
+        player.on_ground = r.on_ground;
         return;
     }
 
@@ -83,61 +59,49 @@ pub fn mario_physics(
     player.vel.y -= g * dt;
     player.vel.y = player.vel.y.max(-FALL_MAX);
 
-    let mut pos = tr.translation.truncate();
     let p_size = player.state.size();
+    // 地形解算走公共模块：先脱困再分轴推进。
+    // 之前是「无条件按 X 穿透深度整体推出」，只要 Y 方向嵌进去 1 单位
+    // （变身长高 / 站上升平台 / 地形接缝错位都会），人就会被横向弹飞几十单位。
+    let solids: Vec<(Entity, Solid_)> = solid_q
+        .iter()
+        .map(|(e, st, s, plat)| {
+            (
+                e,
+                Solid_ {
+                    center: st.translation.truncate(),
+                    size: s.size,
+                    // 移动平台本帧走过的位移，供解算器把站在上面的人一起带走
+                    delta: plat.map_or(Vec2::ZERO, |p| Vec2::new(p.last_dx, p.last_dy)),
+                },
+            )
+        })
+        .collect();
+    let shapes: Vec<Solid_> = solids.iter().map(|(_, s)| *s).collect();
+    let resolved = resolve(tr.translation.truncate(), p_size, player.vel, dt, &shapes);
+    let mut pos = resolved.pos;
+    player.vel = resolved.vel;
+    player.on_ground = resolved.on_ground;
+    // 站在移动平台上要跟着走。`last_dx/last_dy` 之前全库没有任何消费者，
+    // 所以平台是从人脚下滑走的，人还会因此嵌进平台再被横向弹开。
+    if let Some(i) = resolved.ground {
+        pos += solids[i].1.delta;
+    }
+    let hit_above = resolved
+        .ceiling
+        .map(|i| (solids[i].0, solids[i].1.center));
 
-    pos.x += player.vel.x * dt;
-    let left_min = PLAYER_W * 0.5;
+    // 关卡左右边界要用当前体型的半宽：大马里奥比小马里奥宽 2 单位
+    let left_min = p_size.x * 0.5;
     if pos.x < left_min {
         pos.x = left_min;
         player.vel.x = 0.0;
     }
-    let right_max = level_world_max_x() - PLAYER_W * 0.5;
+    let right_max = level_world_max_x() - p_size.x * 0.5;
     if pos.x > right_max {
         pos.x = right_max;
+        player.vel.x = 0.0;
     }
-    for (_e, st, s) in &solid_q {
-        let sp = st.translation.truncate();
-        if aabb_overlap(pos, p_size, sp, s.size) {
-            let dx = pos.x - sp.x;
-            let push = (p_size.x + s.size.x) * 0.5 - dx.abs();
-            if push > 0.0 {
-                if dx > 0.0 {
-                    pos.x += push;
-                } else {
-                    pos.x -= push;
-                }
-                player.vel.x = 0.0;
-            }
-        }
-    }
-
-    pos.y += player.vel.y * dt;
-    let mut on_ground = false;
-    let mut hit_above: Option<(Entity, Vec2)> = None;
-    for (e, st, s) in &solid_q {
-        let sp = st.translation.truncate();
-        if aabb_overlap(pos, p_size, sp, s.size) {
-            let dy = pos.y - sp.y;
-            let push = (p_size.y + s.size.y) * 0.5 - dy.abs();
-            if push > 0.0 {
-                if dy > 0.0 {
-                    pos.y += push;
-                    if player.vel.y < 0.0 {
-                        player.vel.y = 0.0;
-                    }
-                    on_ground = true;
-                } else {
-                    pos.y -= push;
-                    if player.vel.y > 0.0 {
-                        player.vel.y = 0.0;
-                    }
-                    hit_above = Some((e, sp));
-                }
-            }
-        }
-    }
-    player.on_ground = on_ground;
 
     if let Some((e, block_pos)) = hit_above {
         if let Ok(mut q) = question_q.get_mut(e) {

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::common::constants::{ARENA_H, ARENA_W, FONT_BODY, FONT_HEADING};
+use crate::common::constants::{ARENA_H, ARENA_W, FONT_BODY};
 use crate::common::render::UiFont;
 use crate::game::hud::hud_text;
 use crate::game::model::GameEntity;
@@ -166,7 +166,7 @@ fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8
             hud_root,
             value,
             Vec2::new(x, y - 30.0),
-            FONT_HEADING,
+            FONT_BODY,
             value_color,
             MarioHud { kind },
         );

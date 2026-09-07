@@ -162,6 +162,7 @@ pub struct TankShieldVisual {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TankHudKind {
+    Stage,
     Enemies,
     P1Lives,
     P2Lives,

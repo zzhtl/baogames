@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2024"
 default-run = "baogames"
 
+[features]
+default = []
+# 无头截图驱动（src/game/devtools.rs）。默认关闭，release 构建不含这部分代码。
+devtools = []
+
 [dependencies]
 bevy = "0.18"
 noise = "0.9"

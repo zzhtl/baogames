@@ -1,7 +1,10 @@
 pub mod audio;
+pub mod collide;
 pub mod constants;
 pub mod input;
 pub mod pixel_canvas;
+pub mod px;
 pub mod render;
 pub mod settings;
 pub mod sprite_def;
+pub mod theme;

@@ -1,8 +1,11 @@
 use bevy::prelude::*;
 
-use crate::common::constants::{FONT_HEADING, FONT_SMALL};
+use crate::common::constants::{FONT_BODY};
+use bevy::sprite::Anchor;
+use crate::common::px::px;
+use crate::common::theme::{ACCENT, SURFACE, TEXT_MUTED, TEXT_PRIMARY};
 use crate::common::render::{UiFont, attach_sprite_parts};
-use crate::game::hud::{hud_panel, hud_text};
+use crate::game::hud::{hud_bar, hud_text_anchored};
 use crate::game::model::GameEntity;
 
 use super::components::*;
@@ -52,7 +55,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, lev
     );
     spawn_player(commands, player_center, cell_size);
 
-    spawn_hud(commands, font, hud_root, level);
+    spawn_hud(commands, font, hud_root);
 
     let total_time = LEVEL_TIME[idx];
     commands.insert_resource(SokobanStage {
@@ -70,7 +73,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, lev
         pushes: 0,
         time_left: total_time,
         move_cd: 0.0,
-        message: format!("第 {} 关 - 把所有箱子推到目标点！", level),
+        message: "推箱到目标点".to_string(),
         message_clock: 2.4,
         history: Vec::new(),
     });
@@ -194,63 +197,24 @@ fn spawn_player(commands: &mut Commands, center: Vec2, size: f32) {
     attach_sprite_parts(commands, parent, &SOKO_PLAYER, GameEntity);
 }
 
-fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
-    let hud_y = 230.0;
-    hud_panel(
-        commands,
-        hud_root,
-        Vec2::new(0.0, hud_y),
-        Vec2::new(700.0, 50.0),
-        Color::srgb(0.10, 0.13, 0.20),
-        Color::srgb(0.86, 0.62, 0.32),
+fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
+    hud_bar(commands, hud_root, 82.0, SURFACE, Color::srgb(0.86, 0.62, 0.32));
+    hud_text_anchored(
+        commands, font, hud_root, "推箱子",
+        Vec2::new(px(-113.0), px(82.0)), FONT_BODY, TEXT_PRIMARY, Anchor::CENTER_LEFT, (),
     );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        &format!("推箱子 · 第 {} 关", level),
-        Vec2::new(-220.0, hud_y),
-        FONT_HEADING,
-        Color::srgb(1.0, 0.92, 0.72),
-        (),
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "",
-        Vec2::new(160.0, hud_y),
-        FONT_SMALL,
-        Color::srgb(0.92, 0.96, 1.0),
-        SokobanHud,
+    hud_text_anchored(
+        commands, font, hud_root, "", Vec2::new(px(113.0), px(82.0)),
+        FONT_BODY, ACCENT, Anchor::CENTER_RIGHT, SokobanHud,
     );
 
-    hud_panel(
-        commands,
-        hud_root,
-        Vec2::new(0.0, -230.0),
-        Vec2::new(700.0, 50.0),
-        Color::srgb(0.08, 0.10, 0.15),
-        Color::srgb(0.96, 0.72, 0.32),
+    hud_bar(commands, hud_root, -82.0, SURFACE, Color::srgb(0.86, 0.62, 0.32));
+    hud_text_anchored(
+        commands, font, hud_root, "", Vec2::new(px(-113.0), px(-82.0)),
+        FONT_BODY, TEXT_MUTED, Anchor::CENTER_LEFT, SokobanScoreHud,
     );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "方向移动 · 动作二撤销 · 重置键重来 · 开始键暂停",
-        Vec2::new(-70.0, -230.0),
-        FONT_SMALL,
-        Color::srgb(0.86, 0.92, 1.0),
-        (),
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "",
-        Vec2::new(270.0, -230.0),
-        FONT_SMALL,
-        Color::srgb(1.0, 0.86, 0.42),
-        SokobanMessage,
+    hud_text_anchored(
+        commands, font, hud_root, "", Vec2::new(px(113.0), px(-82.0)),
+        FONT_BODY, ACCENT, Anchor::CENTER_RIGHT, SokobanMessage,
     );
 }

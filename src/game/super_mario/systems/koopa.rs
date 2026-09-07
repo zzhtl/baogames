@@ -33,6 +33,8 @@ pub fn mario_koopa_ai(
             if k.state_t <= 0.0 {
                 k.state = KoopaState::Walking;
                 k.vel.x = -KOOPA_SPEED;
+                // 龟壳 30 高 → 走路 48 高，中心不动的话脚底会下沉 9 单位埋进地面
+                tr.translation.y += (KOOPA_H - SHELL_H) * 0.5;
             }
         }
 

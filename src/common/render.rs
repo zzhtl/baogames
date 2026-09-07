@@ -1,7 +1,9 @@
 use bevy::prelude::*;
-use bevy::text::Font;
+use bevy::sprite::Anchor;
+use bevy::text::{Font, FontHinting, FontSmoothing};
 
 use super::constants::{Z_BACKGROUND, Z_SPRITE, Z_TEXT};
+use super::px::snap2;
 use super::sprite_def::SpriteDef;
 
 #[derive(Resource, Clone)]
@@ -68,6 +70,16 @@ pub fn set_text(dst: &mut Mut<Text2d>, value: &str) {
     }
 }
 
+/// 点阵字体专用的 `TextFont`：关掉灰度抗锯齿。
+///
+/// 配合渲染目标的 `scale_factor`（见 [`crate::common::pixel_canvas`]），字形按画布
+/// 像素原生光栅化；再关掉抗锯齿，才能拿到干净的点阵边缘而不是一圈灰边。
+pub fn pixel_font(font: &UiFont, size: f32) -> TextFont {
+    TextFont::from_font_size(size)
+        .with_font(font.0.clone())
+        .with_font_smoothing(FontSmoothing::None)
+}
+
 pub fn text<'a, M: Component>(
     commands: &'a mut Commands,
     font: &UiFont,
@@ -77,11 +89,30 @@ pub fn text<'a, M: Component>(
     color: Color,
     marker: M,
 ) -> EntityCommands<'a> {
+    text_anchored(commands, font, value, pos, size, color, Anchor::CENTER, marker)
+}
+
+/// 带锚点的文本。左对齐的标签列 / 右对齐的数值列靠它才能真正对齐，
+/// 而不是靠「猜这串字有多宽」去凑中心坐标。位置吸附到画布像素网格。
+#[allow(clippy::too_many_arguments)]
+pub fn text_anchored<'a, M: Component>(
+    commands: &'a mut Commands,
+    font: &UiFont,
+    value: &str,
+    pos: Vec2,
+    size: f32,
+    color: Color,
+    anchor: Anchor,
+    marker: M,
+) -> EntityCommands<'a> {
     commands.spawn((
         Text2d::new(value),
-        TextFont::from_font_size(size).with_font(font.0.clone()),
+        pixel_font(font, size),
+        // 字形吸附到整数 X 坐标，避免半像素起笔把竖笔画糊成两列
+        FontHinting::Enabled,
+        anchor,
         TextColor(color),
-        Transform::from_translation(pos.extend(Z_TEXT)),
+        Transform::from_translation(snap2(pos).extend(Z_TEXT)),
         marker,
     ))
 }

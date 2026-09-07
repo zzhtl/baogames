@@ -5,6 +5,8 @@ use bevy::audio::{AudioSink, AudioSinkPlayback};
 pub mod bomb_maze;
 mod bubble_shooter;
 pub mod contra;
+#[cfg(feature = "devtools")]
+mod devtools;
 mod hud;
 pub mod memory_match;
 mod menu;
@@ -18,9 +20,10 @@ pub mod tank;
 use crate::common::audio::{AudioMix, MusicEntity, MusicKind, PlayMusic, PlaySfx, SfxKind};
 use crate::common::constants::{ARENA_H, ARENA_W, WINDOW_H, WINDOW_W, Z_HUD_LAYER};
 use crate::common::input::{ActionInputPlugin, ActionInputSet, ActionState};
+use crate::common::px::px;
 use crate::common::pixel_canvas::{InGameCamera, PixelCanvasConfig, PixelCanvasPlugin};
-use crate::common::render::{UiFont, background_rect, panel, rect};
-use crate::common::settings::{InputAction, InputBindings, PlayerSlot};
+use crate::common::render::{UiFont, background_rect, rect};
+use crate::common::settings::{DisplayMode, InputAction, InputBindings, PlayerSlot};
 use model::*;
 use overlay::OverlayEntity;
 
@@ -42,8 +45,8 @@ pub fn run() {
         crt_enabled: save.settings.crt_enabled,
         shake_enabled: save.settings.screen_shake,
     };
-    App::new()
-        .add_plugins(
+    let mut app = App::new();
+    app.add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
@@ -248,6 +251,9 @@ pub fn run() {
             FixedUpdate,
             (
                 super_mario::mario_player_input,
+                // 平台先动、物理再解算：反过来的话 last_dx/last_dy 是上一帧的位移，
+                // 玩家会先被平台压进去、再被地形解算横向弹开
+                super_mario::mario_platform_update,
                 super_mario::mario_physics,
                 super_mario::mario_checkpoint_update,
                 super_mario::mario_player_animation,
@@ -258,7 +264,6 @@ pub fn run() {
                 super_mario::mario_koopa_ai,
                 super_mario::mario_player_vs_koopa,
                 super_mario::mario_shell_kills,
-                super_mario::mario_platform_update,
                 super_mario::mario_lava_check,
                 super_mario::mario_powerup_update,
                 super_mario::mario_player_vs_powerup,
@@ -403,8 +408,14 @@ pub fn run() {
                 cleanup::<OverlayEntity>,
                 cleanup_stage_resources,
             ),
-        )
-        .run();
+        );
+
+    #[cfg(feature = "devtools")]
+    if let Some((scene, out)) = devtools::requested_scene() {
+        app.add_plugins(devtools::CapturePlugin { scene, out });
+    }
+
+    app.run();
 }
 
 /// 相机是常驻实体，魂斗罗/超级玛丽会横向平移它；
@@ -416,7 +427,7 @@ fn reset_camera(mut cam_q: Query<&mut Transform, With<InGameCamera>>) {
     }
 }
 
-fn paint_stage_backdrop(commands: &mut Commands, kind: GameKind) {
+fn paint_stage_backdrop(commands: &mut Commands, kind: GameKind, display_mode: DisplayMode) {
     let (base, grid, border) = match kind {
         GameKind::Tank => (
             Color::srgb(0.07, 0.12, 0.08),
@@ -460,6 +471,9 @@ fn paint_stage_backdrop(commands: &mut Commands, kind: GameKind) {
         ),
     };
 
+    // 背景铺满最宽的比例即可；边框必须按**当前可见宽度**画，
+    // 原来用 ARENA_W(=16:9 的 960) 减 28，在默认 4:3(可见 720) 下整条边框直接出屏。
+    let visible_w = display_mode.world_width();
     background_rect(
         commands,
         Vec2::ZERO,
@@ -467,41 +481,47 @@ fn paint_stage_backdrop(commands: &mut Commands, kind: GameKind) {
         base,
         GameEntity,
     );
-    let half_w = (ARENA_W * 0.5) as i32;
+    let half_w = (visible_w * 0.5) as i32;
     let half_h = (ARENA_H * 0.5) as i32;
-    for x in (-half_w..=half_w).step_by(48) {
+    let step = px(16.0) as usize; // 16 画布像素一格
+    for x in (-half_w..=half_w).step_by(step) {
         rect(
             commands,
             Vec2::new(x as f32, 0.0),
-            Vec2::new(2.0, ARENA_H),
+            Vec2::new(px(1.0), ARENA_H),
             grid,
             GameEntity,
         );
     }
-    for y in (-half_h..=half_h).step_by(48) {
+    for y in (-half_h..=half_h).step_by(step) {
         rect(
             commands,
             Vec2::new(0.0, y as f32),
-            Vec2::new(ARENA_W, 2.0),
+            Vec2::new(visible_w, px(1.0)),
             grid,
             GameEntity,
         );
     }
-    panel(
-        commands,
-        Vec2::ZERO,
-        Vec2::new(ARENA_W - 28.0, ARENA_H - 28.0),
-        Color::srgba(0.0, 0.0, 0.0, 0.0),
-        border,
-        GameEntity,
-    );
+    // 画四条边而不是「透明填充的 panel」：panel 是「描边色整块 + 内缩的填充块」，
+    // 填充块透明时下面那整块描边色会盖满全屏，把游戏画面整个吃掉。
+    let frame = Vec2::new(visible_w - px(2.0), ARENA_H - px(2.0));
+    for (pos, size) in [
+        (Vec2::new(0.0, frame.y * 0.5), Vec2::new(frame.x, px(1.0))),
+        (Vec2::new(0.0, -frame.y * 0.5), Vec2::new(frame.x, px(1.0))),
+        (Vec2::new(-frame.x * 0.5, 0.0), Vec2::new(px(1.0), frame.y)),
+        (Vec2::new(frame.x * 0.5, 0.0), Vec2::new(px(1.0), frame.y)),
+    ] {
+        rect(commands, pos, size, border, GameEntity);
+    }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn setup_game(
     mut commands: Commands,
     selected: Res<SelectedGame>,
     save: Res<SaveData>,
     font: Res<UiFont>,
+    canvas: Res<PixelCanvasConfig>,
     bubble_assets: Res<bubble_shooter::BubbleAssets>,
     camera_q: Query<Entity, With<InGameCamera>>,
     mut music: MessageWriter<PlayMusic>,
@@ -543,7 +563,7 @@ fn setup_game(
     }
 
     if !matches!(selected.0, GameKind::SuperMario | GameKind::Contra) {
-        paint_stage_backdrop(&mut commands, selected.0);
+        paint_stage_backdrop(&mut commands, selected.0, canvas.display_mode);
     }
 
     match selected.0 {

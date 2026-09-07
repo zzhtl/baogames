@@ -141,4 +141,43 @@ mod tests {
             boss
         ));
     }
+
+    /// 每块空中平台都必须真的跳得上去。
+    ///
+    /// 关卡原本是照着旧解算的「穿透弹射」摆的：玩家中心越过平台中心时会被
+    /// 瞬移上去。解算改成按帧初方位判定后那条路没了，平台高度必须落回
+    /// 真实跳跃升幅之内，否则整段关卡不可通过。
+    #[test]
+    fn every_platform_is_reachable() {
+        use crate::common::collide::apex_height;
+        use super::super::constants::{GRAVITY, JUMP_VEL, PLATFORMS, PLAYER_SPEED};
+
+        let dt = 1.0 / 60.0;
+        let apex = apex_height(JUMP_VEL, GRAVITY, dt);
+        // 留 12 单位余量：正好卡在顶点才够得着的平台在手感上等于跳不上去
+        let max_rise = apex - 12.0;
+        // 一次跳跃的水平射程（总滞空 × 水平速度），够不到就必须靠更近的平台中转
+        let reach = 2.0 * JUMP_VEL / GRAVITY * PLAYER_SPEED;
+
+        for (i, &(x, top, w)) in PLATFORMS.iter().enumerate() {
+            if top <= max_rise {
+                continue; // 从地面直达
+            }
+            let (left, right) = (x - w * 0.5, x + w * 0.5);
+            let ok = PLATFORMS.iter().enumerate().any(|(j, &(jx, jtop, jw))| {
+                if i == j || jtop >= top || top - jtop > max_rise {
+                    return false;
+                }
+                let (jleft, jright) = (jx - jw * 0.5, jx + jw * 0.5);
+                // 两块平台的水平间距要在单跳射程内（重叠则间距为 0）
+                let gap = (left - jright).max(jleft - right).max(0.0);
+                gap <= reach * 0.7
+            });
+            assert!(
+                ok,
+                "平台 #{i} (x={x}, 顶面 +{top}) 既够不到地面起跳({max_rise:.1})，\
+                 也没有可以中转的更低平台",
+            );
+        }
+    }
 }

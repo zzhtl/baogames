@@ -2,9 +2,12 @@ use bevy::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-use crate::common::constants::{FONT_HEADING, FONT_SMALL};
+use crate::common::constants::{FONT_BODY};
+use bevy::sprite::Anchor;
+use crate::common::px::px;
+use crate::common::theme::{ACCENT, SURFACE, TEXT_MUTED, TEXT_PRIMARY};
 use crate::common::render::{UiFont, attach_sprite_parts};
-use crate::game::hud::{hud_panel, hud_text};
+use crate::game::hud::{hud_bar, hud_text_anchored};
 use crate::game::model::GameEntity;
 
 use super::components::*;
@@ -41,7 +44,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, lev
     }
 
     spawn_cursor(commands, Vec2::new(origin_x, origin_y), card_size);
-    spawn_hud(commands, font, hud_root, level);
+    spawn_hud(commands, font, hud_root);
 
     commands.insert_resource(MemoryStage {
         cols,
@@ -57,7 +60,7 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, lev
         first_pick: None,
         second_pick: None,
         resolve_timer: 0.0,
-        message: format!("第 {} 关 - 先记住所有牌！", level),
+        message: "先记住所有牌！".to_string(),
         message_clock: 2.4,
         preview_timer: PREVIEW_TIME,
         combo_streak: 0,
@@ -195,64 +198,26 @@ fn spawn_cursor(commands: &mut Commands, origin: Vec2, card_size: f32) {
     }
 }
 
-fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
-    let hud_y = 230.0;
-    hud_panel(
-        commands,
-        hud_root,
-        Vec2::new(0.0, hud_y),
-        Vec2::new(700.0, 50.0),
-        Color::srgb(0.10, 0.13, 0.20),
-        Color::srgb(0.45, 0.75, 0.96),
+fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
+    // 顶栏：左标题 / 右进度；底栏：左分数 / 右瞬时消息。
+    // 原来是一条 45 字的单行文本，在 240 像素宽的画布上要 540 像素才放得下。
+    hud_bar(commands, hud_root, 82.0, SURFACE, Color::srgb(0.45, 0.75, 0.96));
+    hud_text_anchored(
+        commands, font, hud_root, "记忆翻翻乐",
+        Vec2::new(px(-113.0), px(82.0)), FONT_BODY, TEXT_PRIMARY, Anchor::CENTER_LEFT, (),
     );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        &format!("记忆翻翻乐 · 第 {} 关", level),
-        Vec2::new(-220.0, hud_y),
-        FONT_HEADING,
-        Color::srgb(1.0, 0.96, 0.78),
-        (),
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "",
-        Vec2::new(160.0, hud_y),
-        FONT_SMALL,
-        Color::srgb(0.86, 0.94, 1.0),
-        MemoryHud,
+    hud_text_anchored(
+        commands, font, hud_root, "", Vec2::new(px(113.0), px(82.0)),
+        FONT_BODY, ACCENT, Anchor::CENTER_RIGHT, MemoryHud,
     );
 
-    // 底部操作提示 + 消息条
-    hud_panel(
-        commands,
-        hud_root,
-        Vec2::new(0.0, -230.0),
-        Vec2::new(700.0, 50.0),
-        Color::srgb(0.08, 0.10, 0.15),
-        Color::srgb(0.96, 0.72, 0.32),
+    hud_bar(commands, hud_root, -82.0, SURFACE, Color::srgb(0.45, 0.75, 0.96));
+    hud_text_anchored(
+        commands, font, hud_root, "", Vec2::new(px(-113.0), px(-82.0)),
+        FONT_BODY, TEXT_MUTED, Anchor::CENTER_LEFT, MemoryScoreHud,
     );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "方向移动 · 动作一翻牌 · 开始键暂停 · 返回键回到卡带墙",
-        Vec2::new(-70.0, -230.0),
-        FONT_SMALL,
-        Color::srgb(0.86, 0.92, 1.0),
-        (),
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "",
-        Vec2::new(270.0, -230.0),
-        FONT_SMALL,
-        Color::srgb(1.0, 0.86, 0.42),
-        MemoryMessage,
+    hud_text_anchored(
+        commands, font, hud_root, "", Vec2::new(px(113.0), px(-82.0)),
+        FONT_BODY, ACCENT, Anchor::CENTER_RIGHT, MemoryMessage,
     );
 }

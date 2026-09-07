@@ -33,6 +33,7 @@ pub fn tank_hud_update(
     let danger_blink = (time.elapsed_secs() * 8.0).sin() > 0.0;
     for (mut text, mut color, hud) in &mut hud {
         match hud.kind {
+            TankHudKind::Stage => set_text(&mut text, &session.level.to_string()),
             TankHudKind::Enemies => set_text(&mut text, &remaining.to_string()),
             TankHudKind::P1Lives => set_text(&mut text, &format!("×{}", stage.p1_lives.max(0))),
             TankHudKind::P2Lives => set_text(&mut text, &format!("×{}", stage.p2_lives.max(0))),

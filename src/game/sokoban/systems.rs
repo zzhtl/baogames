@@ -271,8 +271,9 @@ pub fn sokoban_hud_update(
     session: Res<GameSession>,
     save: Res<SaveData>,
     stage: Res<SokobanStage>,
-    mut hud: Query<&mut Text2d, (With<SokobanHud>, Without<SokobanMessage>)>,
-    mut msg: Query<&mut Text2d, (With<SokobanMessage>, Without<SokobanHud>)>,
+    mut hud: Query<&mut Text2d, (With<SokobanHud>, Without<SokobanMessage>, Without<SokobanScoreHud>)>,
+    mut score_hud: Query<&mut Text2d, (With<SokobanScoreHud>, Without<SokobanMessage>, Without<SokobanHud>)>,
+    mut msg: Query<&mut Text2d, (With<SokobanMessage>, Without<SokobanHud>, Without<SokobanScoreHud>)>,
 ) {
     if session.kind != GameKind::Sokoban {
         return;
@@ -280,21 +281,20 @@ pub fn sokoban_hud_update(
     if let Ok(mut t) = hud.single_mut() {
         let done = stage.boxes.iter().filter(|&&(c, r)| stage.tile_at(c, r) == Tile::Goal).count();
         let total = stage.boxes.len();
-        let high = save.high_scores[GameKind::Sokoban.index()].max(session.score);
         set_text(
             &mut t,
             &format!(
-                "剩余 {:>3.0}s   箱子 {}/{}   步数 {}   推箱 {}   撤销 {}   分数 {}   纪录 {}",
-                stage.time_left,
+                "第{}关  时间 {:.0}  箱子 {}/{}",
+                session.level,
+                stage.time_left.max(0.0),
                 done,
                 total,
-                stage.moves,
-                stage.pushes,
-                stage.history.len(),
-                session.score,
-                high,
             ),
         );
+    }
+    if let Ok(mut t) = score_hud.single_mut() {
+        let high = save.high_scores[GameKind::Sokoban.index()].max(session.score);
+        set_text(&mut t, &format!("分数 {}  纪录 {}  步数 {}", session.score, high, stage.moves));
     }
     // 暂停/结束由统一覆盖层显示，这里只放玩法瞬时消息
     if let Ok(mut t) = msg.single_mut() {

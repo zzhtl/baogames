@@ -3,7 +3,8 @@
 pub const BM_COLS: i32 = 15;
 pub const BM_ROWS: i32 = 11;
 pub const BM_TILE: f32 = 36.0;
-pub const BM_OFFSET_X: f32 = -100.0;
+// 迷宫 180 画布像素宽：原来的 -100 会让最左一列落到可见区(±120 像素)之外
+pub const BM_OFFSET_X: f32 = -84.0;
 pub const BM_OFFSET_Y: f32 = -10.0;
 pub const BM_PLAY_W: f32 = BM_COLS as f32 * BM_TILE;
 pub const BM_PLAY_H: f32 = BM_ROWS as f32 * BM_TILE;

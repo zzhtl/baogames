@@ -18,6 +18,9 @@ pub const PLAYER_ROLL_INVINCIBLE: f32 = 0.82;
 pub const PLAYER_RESPAWN_X: f32 = PLAY_OFFSET_X;
 pub const PLAYER_RESPAWN_Y: f32 = PLAY_BOTTOM + 60.0;
 
+// 层级：关卡底板(-10) < 战场底色 < 星空 < 精灵(0)
+pub const Z_SPACE_BG: f32 = -2.0;
+pub const Z_SPACE_BAND: f32 = -1.5;
 pub const Z_STAR: f32 = -0.5;
 pub const Z_ENEMY: f32 = 1.0;
 pub const Z_BULLET: f32 = 1.4;

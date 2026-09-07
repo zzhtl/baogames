@@ -4,7 +4,7 @@
 //! 相机按整数倍最近邻放大到窗口。逻辑世界始终保持 540 单位高，画布上的一个
 //! 像素对应三个世界单位。
 
-use bevy::camera::RenderTarget;
+use bevy::camera::{ImageRenderTarget, RenderTarget};
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use bevy::render::render_resource::{
@@ -12,6 +12,7 @@ use bevy::render::render_resource::{
 };
 
 use super::constants::ARENA_H;
+use super::px::{WORLD_PER_PX, snap};
 use super::audio::{PlaySfx, SfxKind};
 use super::settings::DisplayMode;
 
@@ -104,7 +105,14 @@ fn setup_pixel_canvas(
             },
             ..OrthographicProjection::default_2d()
         }),
-        RenderTarget::Image(image_handle.clone().into()),
+        // scale_factor 决定 Text2d 的字形按多大分辨率光栅化。默认的 `.into()` 会填
+        // 1.0，于是 font_size=36 的字被栅格化成 36px 再塞进 12 个画布像素——3 倍降采样
+        // 把点阵字糊掉。填 1/3 后字形直接按 12px 光栅化，纹素与画布像素 1:1。
+        // 投影用的是 ScalingMode::Fixed，不受 scale_factor 影响，所以版面尺寸不变。
+        RenderTarget::Image(ImageRenderTarget {
+            handle: image_handle.clone(),
+            scale_factor: 1.0 / WORLD_PER_PX,
+        }),
         Msaa::Off,
         InGameCamera,
         GAME_LAYERS,
@@ -157,7 +165,9 @@ fn sync_canvas_mode(
     canvas_image: Res<CanvasImage>,
     mut images: ResMut<Assets<Image>>,
     mut game_projection: Query<&mut Projection, With<InGameCamera>>,
-    mut canvas_sprite: Query<&mut Sprite, With<Canvas>>,
+    // 两个查询都要 &mut Sprite，Bevy 无法自己证明 With<Canvas> 与 With<CrtScanline>
+    // 不相交，必须显式 Without 拆开——否则系统初始化时直接 panic(B0001)。
+    mut canvas_sprite: Query<&mut Sprite, (With<Canvas>, Without<CrtScanline>)>,
     mut scanlines: Query<(&mut Sprite, &mut Visibility), With<CrtScanline>>,
 ) {
     if !config.is_changed() {
@@ -238,7 +248,8 @@ fn apply_camera_shake(
         0.0
     };
     let wave = (time.elapsed_secs() * 73.0).sin() + (time.elapsed_secs() * 41.0).cos() * 0.5;
-    transform.translation.y = (wave * 4.0 * strength).round();
+    // 必须吸附到画布像素网格：舍到世界单位会留下 1/3 像素的偏移，整屏 shimmer
+    transform.translation.y = snap(wave * 4.0 * strength);
 }
 
 fn fit_canvas(

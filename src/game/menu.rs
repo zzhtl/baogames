@@ -2,10 +2,15 @@ use bevy::input::gamepad::Gamepad;
 use bevy::prelude::*;
 
 use crate::common::audio::{AudioMix, MusicKind, PlayMusic, PlaySfx, SfxKind};
-use crate::common::constants::{ARENA_H, ARENA_W, FONT_BODY, FONT_HEADING, FONT_SMALL, FONT_TITLE};
+use crate::common::constants::{ARENA_H, ARENA_W, FONT_BODY, FONT_TITLE};
+use crate::common::px::px;
+use crate::common::theme::{
+    ACCENT, BG_DEEP, BORDER_DIM, SURFACE, SURFACE_SEL, TEXT_DIM, TEXT_MUTED, TEXT_PRIMARY,
+};
 use crate::common::input::ActionState;
 use crate::common::pixel_canvas::PixelCanvasConfig;
-use crate::common::render::{UiFont, background_rect, panel, rect, text};
+use bevy::sprite::Anchor;
+use crate::common::render::{UiFont, background_rect, panel, rect, text, text_anchored};
 use crate::common::settings::{
     InputAction, InputBindings, KeyboardKey, PadButton, PlayerSlot,
 };
@@ -58,105 +63,101 @@ impl Default for MenuUiState {
     }
 }
 
-fn menu_accent(kind: GameKind) -> Color {
-    match kind {
-        GameKind::Tank => Color::srgb(0.35, 0.78, 0.42),
-        GameKind::BombMaze => Color::srgb(0.95, 0.58, 0.24),
-        GameKind::SpaceShooter => Color::srgb(0.36, 0.72, 1.0),
-        GameKind::SuperMario => Color::srgb(0.92, 0.35, 0.28),
-        GameKind::Contra => Color::srgb(0.92, 0.18, 0.10),
-        GameKind::BubbleBobble => Color::srgb(0.9, 0.34, 0.78),
-        GameKind::MemoryMatch => Color::srgb(0.36, 0.86, 0.86),
-        GameKind::Sokoban => Color::srgb(0.96, 0.78, 0.32),
-    }
-}
+// 卡带墙的版面全部按画布像素设计（240×180），再用 px() 换算成世界单位。
+// 直接写世界单位会得到 0.67 像素的描边和半像素的文字起笔。
+const CARD_W: f32 = px(112.0);
+const CARD_H: f32 = px(26.0);
+const CARD_COL_X: f32 = px(58.0);
+const CARD_ROW_TOP: f32 = px(49.0);
+const CARD_ROW_STEP: f32 = px(28.0);
+const PANEL_W: f32 = px(230.0);
 
 fn spawn_backdrop(commands: &mut Commands) {
     background_rect(
         commands,
         Vec2::ZERO,
         Vec2::new(ARENA_W * 1.4, ARENA_H),
-        Color::srgb(0.025, 0.035, 0.055),
+        BG_DEEP,
         MenuEntity,
     );
-    for y in (-240..=240).step_by(24) {
-        rect(
-            commands,
-            Vec2::new(0.0, y as f32),
-            Vec2::new(ARENA_W * 1.4, 3.0),
-            Color::srgb(0.045, 0.06, 0.09),
-            MenuEntity,
-        );
+    // 12 像素一格的暗色网格，1 像素线宽——之前是 3 世界单位的线配 24 单位间距，
+    // 换算到画布上是 1 像素线配 8 像素间距，密到发糊。
+    let grid = Color::srgb(0.063, 0.078, 0.110);
+    let step = px(12.0) as i32;
+    for y in (-((ARENA_H * 0.5) as i32)..=((ARENA_H * 0.5) as i32)).step_by(step as usize) {
+        rect(commands, Vec2::new(0.0, y as f32), Vec2::new(ARENA_W * 1.4, px(1.0)), grid, MenuEntity);
     }
-    for x in (-480..=480).step_by(24) {
-        rect(
-            commands,
-            Vec2::new(x as f32, 0.0),
-            Vec2::new(3.0, ARENA_H),
-            Color::srgb(0.04, 0.052, 0.078),
-            MenuEntity,
-        );
+    for x in (-672..=672).step_by(step as usize) {
+        rect(commands, Vec2::new(x as f32, 0.0), Vec2::new(px(1.0), ARENA_H), grid, MenuEntity);
     }
 }
 
 fn card_center(index: usize) -> Vec2 {
     Vec2::new(
-        -168.0 + (index % 2) as f32 * 336.0,
-        130.0 - (index / 2) as f32 * 66.0,
+        if index.is_multiple_of(2) { -CARD_COL_X } else { CARD_COL_X },
+        CARD_ROW_TOP - (index / 2) as f32 * CARD_ROW_STEP,
     )
 }
 
+/// 卡带封面图标：18×18 画布像素，所有零件都落在整像素网格上。
 fn spawn_cover_icon(commands: &mut Commands, kind: GameKind, center: Vec2, accent: Color) {
-    rect(commands, center, Vec2::new(48.0, 42.0), Color::srgb(0.025, 0.03, 0.04), MenuEntity);
-    let dark = Color::srgb(0.12, 0.14, 0.18);
-    match kind {
-        GameKind::Tank => {
-            rect(commands, center + Vec2::new(0.0, -5.0), Vec2::new(27.0, 22.0), accent, MenuEntity);
-            rect(commands, center + Vec2::new(0.0, 11.0), Vec2::new(5.0, 17.0), accent, MenuEntity);
-            for x in [-17.0, 17.0] {
-                rect(commands, center + Vec2::new(x, -5.0), Vec2::new(7.0, 28.0), dark, MenuEntity);
-            }
-        }
-        GameKind::BombMaze => {
-            rect(commands, center, Vec2::splat(27.0), accent, MenuEntity);
-            rect(commands, center + Vec2::new(9.0, 13.0), Vec2::new(5.0, 10.0), dark, MenuEntity);
-            rect(commands, center + Vec2::new(13.0, 19.0), Vec2::new(9.0, 3.0), Color::srgb(1.0, 0.85, 0.3), MenuEntity);
-        }
-        GameKind::SpaceShooter => {
-            rect(commands, center, Vec2::new(11.0, 37.0), accent, MenuEntity);
-            rect(commands, center + Vec2::new(0.0, -5.0), Vec2::new(37.0, 10.0), accent, MenuEntity);
-            rect(commands, center + Vec2::new(0.0, -19.0), Vec2::new(7.0, 8.0), Color::srgb(1.0, 0.72, 0.2), MenuEntity);
-        }
-        GameKind::SuperMario => {
-            rect(commands, center + Vec2::new(0.0, 10.0), Vec2::new(25.0, 8.0), accent, MenuEntity);
-            rect(commands, center + Vec2::new(0.0, -1.0), Vec2::new(19.0, 13.0), Color::srgb(0.96, 0.72, 0.45), MenuEntity);
-            rect(commands, center + Vec2::new(-7.0, -14.0), Vec2::new(9.0, 15.0), Color::srgb(0.24, 0.42, 0.9), MenuEntity);
-            rect(commands, center + Vec2::new(7.0, -14.0), Vec2::new(9.0, 15.0), Color::srgb(0.24, 0.42, 0.9), MenuEntity);
-        }
-        GameKind::Contra => {
-            rect(commands, center + Vec2::new(-5.0, 4.0), Vec2::new(16.0, 31.0), accent, MenuEntity);
-            rect(commands, center + Vec2::new(9.0, 8.0), Vec2::new(24.0, 5.0), Color::srgb(0.74, 0.78, 0.88), MenuEntity);
-            rect(commands, center + Vec2::new(-10.0, -17.0), Vec2::new(7.0, 12.0), dark, MenuEntity);
-            rect(commands, center + Vec2::new(2.0, -17.0), Vec2::new(7.0, 12.0), dark, MenuEntity);
-        }
-        GameKind::BubbleBobble => {
-            for (offset, color) in [
-                (Vec2::new(-10.0, 7.0), accent),
-                (Vec2::new(10.0, 7.0), Color::srgb(0.35, 0.8, 1.0)),
-                (Vec2::new(0.0, -10.0), Color::srgb(1.0, 0.75, 0.25)),
-            ] {
-                rect(commands, center + offset, Vec2::splat(17.0), color, MenuEntity);
-            }
-        }
-        GameKind::MemoryMatch => {
-            rect(commands, center + Vec2::new(-10.0, 0.0), Vec2::new(17.0, 27.0), accent, MenuEntity);
-            rect(commands, center + Vec2::new(10.0, 0.0), Vec2::new(17.0, 27.0), Color::srgb(0.9, 0.45, 0.55), MenuEntity);
-        }
-        GameKind::Sokoban => {
-            rect(commands, center, Vec2::splat(29.0), Color::srgb(0.55, 0.28, 0.1), MenuEntity);
-            rect(commands, center, Vec2::splat(21.0), accent, MenuEntity);
-            rect(commands, center, Vec2::splat(7.0), Color::srgb(1.0, 0.93, 0.62), MenuEntity);
-        }
+    // 每个零件写成画布像素的 (dx, dy, w, h)，spawn 时统一 px() 换算。
+    let dark = Color::srgb(0.10, 0.12, 0.16);
+    let light = Color::srgb(0.96, 0.93, 0.85);
+    let parts: &[(f32, f32, f32, f32, Color)] = match kind {
+        GameKind::Tank => &[
+            (0.0, -2.0, 11.0, 7.0, accent),
+            (0.0, 3.0, 3.0, 6.0, accent),
+            (-6.0, -1.0, 2.0, 11.0, dark),
+            (6.0, -1.0, 2.0, 11.0, dark),
+        ],
+        GameKind::BombMaze => &[
+            (0.0, -1.0, 11.0, 11.0, accent),
+            (2.0, 6.0, 2.0, 4.0, dark),
+            (4.0, 8.0, 3.0, 2.0, Color::srgb(1.0, 0.85, 0.3)),
+        ],
+        GameKind::SpaceShooter => &[
+            (0.0, 1.0, 4.0, 13.0, accent),
+            (0.0, -1.0, 14.0, 4.0, accent),
+            (0.0, -7.0, 3.0, 3.0, Color::srgb(1.0, 0.72, 0.2)),
+        ],
+        GameKind::SuperMario => &[
+            (0.0, 5.0, 10.0, 3.0, accent),
+            (0.0, 1.0, 8.0, 5.0, Color::srgb(0.96, 0.72, 0.45)),
+            (-2.0, -5.0, 3.0, 6.0, Color::srgb(0.24, 0.42, 0.9)),
+            (2.0, -5.0, 3.0, 6.0, Color::srgb(0.24, 0.42, 0.9)),
+        ],
+        GameKind::Contra => &[
+            (-2.0, 2.0, 6.0, 10.0, accent),
+            (4.0, 3.0, 8.0, 2.0, Color::srgb(0.74, 0.78, 0.88)),
+            (-4.0, -6.0, 3.0, 5.0, dark),
+            (0.0, -6.0, 3.0, 5.0, dark),
+        ],
+        GameKind::BubbleBobble => &[
+            (-4.0, 3.0, 7.0, 7.0, accent),
+            (4.0, 3.0, 7.0, 7.0, Color::srgb(0.35, 0.8, 1.0)),
+            (0.0, -4.0, 7.0, 7.0, Color::srgb(1.0, 0.75, 0.25)),
+        ],
+        GameKind::MemoryMatch => &[
+            (-4.0, 0.0, 7.0, 11.0, accent),
+            (4.0, 0.0, 7.0, 11.0, Color::srgb(0.9, 0.45, 0.55)),
+            (-4.0, 0.0, 3.0, 5.0, light),
+        ],
+        GameKind::Sokoban => &[
+            (0.0, 0.0, 13.0, 13.0, Color::srgb(0.55, 0.30, 0.12)),
+            (0.0, 0.0, 9.0, 9.0, accent),
+            (0.0, 0.0, 3.0, 3.0, Color::srgb(1.0, 0.93, 0.62)),
+        ],
+    };
+    rect(commands, center, Vec2::splat(px(18.0)), Color::srgb(0.031, 0.039, 0.055), MenuEntity);
+    for (dx, dy, w, h, color) in parts.iter().copied() {
+        rect(
+            commands,
+            center + Vec2::new(px(dx), px(dy)),
+            Vec2::new(px(w), px(h)),
+            color,
+            MenuEntity,
+        );
     }
 }
 
@@ -167,120 +168,145 @@ fn build_library(
     selected: GameKind,
     ui: &MenuUiState,
 ) {
-    panel(
-        commands,
-        Vec2::new(0.0, 232.0),
-        Vec2::new(660.0, 54.0),
-        Color::srgb(0.08, 0.10, 0.15),
-        Color::srgb(0.98, 0.78, 0.28),
-        MenuEntity,
-    );
-    text(commands, font, "BAOGAMES · 经典卡带墙", Vec2::new(0.0, 235.0), FONT_TITLE, Color::srgb(1.0, 0.92, 0.58), MenuEntity);
-    text(commands, font, "方向选择 · 开始键游玩 · 动作一选关 · 动作二设置", Vec2::new(0.0, 198.0), FONT_BODY, Color::srgb(0.65, 0.8, 0.95), MenuEntity);
+    text(commands, font, "经典卡带墙", Vec2::new(0.0, px(78.0)), FONT_TITLE, ACCENT, MenuEntity);
+    rect(commands, Vec2::new(0.0, px(65.0)), Vec2::new(PANEL_W, px(1.0)), BORDER_DIM, MenuEntity);
 
     for (index, kind) in GameKind::ALL.iter().copied().enumerate() {
         let center = card_center(index);
-        let accent = menu_accent(kind);
-        let selected_card = kind == selected;
-        let border = if selected_card && ui.library_focus == LibraryFocus::Games {
-            Color::srgb(1.0, 0.9, 0.4)
-        } else {
-            accent
-        };
+        let accent = kind.accent();
+        let focused = kind == selected && ui.library_focus == LibraryFocus::Games;
         panel(
             commands,
             center,
-            Vec2::new(320.0, 56.0),
-            if selected_card { Color::srgb(0.13, 0.16, 0.22) } else { Color::srgb(0.075, 0.09, 0.13) },
-            border,
+            Vec2::new(CARD_W, CARD_H),
+            if kind == selected { SURFACE_SEL } else { SURFACE },
+            if focused { ACCENT } else { accent },
             MenuEntity,
         );
-        spawn_cover_icon(commands, kind, center + Vec2::new(-128.0, 0.0), accent);
-        let title = kind.title().split_once(' ').map(|(_, title)| title).unwrap_or(kind.title());
-        text(commands, font, title, center + Vec2::new(-47.0, 11.0), FONT_HEADING, Color::srgb(1.0, 0.96, 0.84), MenuEntity);
-        let info = format!(
-            "记录 {:06}  关卡 {}/{}",
-            save.high_scores[kind.index()],
-            save.unlocked_levels[kind.index()],
-            kind.max_level(),
+        spawn_cover_icon(commands, kind, center + Vec2::new(px(-45.0), 0.0), accent);
+        text_anchored(
+            commands, font, kind.short_title(),
+            center + Vec2::new(px(-30.0), px(6.0)),
+            FONT_BODY,
+            if kind == selected { TEXT_PRIMARY } else { TEXT_MUTED },
+            Anchor::CENTER_LEFT, MenuEntity,
         );
-        text(commands, font, &info, center + Vec2::new(25.0, -13.0), FONT_SMALL, Color::srgb(0.65, 0.76, 0.88), MenuEntity);
+        let idx = kind.index();
+        let info = format!(
+            "{}/{}  {:06}",
+            save.unlocked_levels[idx].min(kind.max_level()),
+            kind.max_level(),
+            save.high_scores[idx],
+        );
+        text_anchored(
+            commands, font, &info,
+            center + Vec2::new(px(-30.0), px(-6.0)),
+            FONT_BODY, TEXT_DIM, Anchor::CENTER_LEFT, MenuEntity,
+        );
     }
 
     let index = selected.index();
     let level = save.selected_levels[index].clamp(1, save.unlocked_levels[index]);
-    let stage_border = if ui.library_focus == LibraryFocus::Stage {
-        Color::srgb(1.0, 0.9, 0.4)
+    let stage_focused = ui.library_focus == LibraryFocus::Stage;
+    panel(
+        commands,
+        Vec2::new(0.0, px(-71.0)),
+        Vec2::new(PANEL_W, px(38.0)),
+        SURFACE,
+        if stage_focused { ACCENT } else { BORDER_DIM },
+        MenuEntity,
+    );
+    text(commands, font, selected.goal_text(), Vec2::new(0.0, px(-58.0)), FONT_BODY, TEXT_MUTED, MenuEntity);
+    text(
+        commands, font, &format!("◀  第 {level} 关  ▶"),
+        Vec2::new(0.0, px(-71.0)), FONT_BODY,
+        if stage_focused { ACCENT } else { TEXT_PRIMARY }, MenuEntity,
+    );
+    let hint = if stage_focused {
+        "左右选关 · 开始键游玩"
     } else {
-        menu_accent(selected)
+        "动作一选关 · 动作二设置"
     };
-    panel(commands, Vec2::new(0.0, -190.0), Vec2::new(660.0, 104.0), Color::srgb(0.055, 0.07, 0.105), stage_border, MenuEntity);
-    text(commands, font, selected.goal_text(), Vec2::new(0.0, -162.0), FONT_BODY, Color::srgb(0.88, 0.92, 1.0), MenuEntity);
-    text(commands, font, &format!("◀  第 {level} 关  ▶"), Vec2::new(0.0, -194.0), FONT_HEADING, Color::srgb(1.0, 0.88, 0.45), MenuEntity);
-    let hint = if ui.library_focus == LibraryFocus::Stage {
-        "左右选关 · 动作一 / 开始键游玩 · 动作二返回"
-    } else {
-        "动作一进入选关 · 开始键从当前关游玩"
-    };
-    text(commands, font, hint, Vec2::new(0.0, -226.0), FONT_SMALL, Color::srgb(0.58, 0.72, 0.88), MenuEntity);
+    text(commands, font, hint, Vec2::new(0.0, px(-84.0)), FONT_BODY, TEXT_DIM, MenuEntity);
 }
 
 fn build_settings(commands: &mut Commands, font: &UiFont, save: &SaveData, ui: &MenuUiState) {
-    panel(commands, Vec2::ZERO, Vec2::new(660.0, 480.0), Color::srgb(0.055, 0.07, 0.105), Color::srgb(0.45, 0.75, 0.95), MenuEntity);
-    text(commands, font, "系统设置", Vec2::new(0.0, 205.0), FONT_TITLE, Color::srgb(0.75, 0.9, 1.0), MenuEntity);
+    panel(commands, Vec2::ZERO, Vec2::new(px(224.0), px(164.0)), SURFACE, BORDER_DIM, MenuEntity);
+    text(commands, font, "系统设置", Vec2::new(0.0, px(68.0)), FONT_TITLE, TEXT_PRIMARY, MenuEntity);
     let settings = &save.settings;
     let rows = [
         ("画面比例", settings.display_mode.label().to_string()),
         ("玩法模式", settings.gameplay_profile.label().to_string()),
         ("CRT 扫描线", if settings.crt_enabled { "开" } else { "关" }.to_string()),
         ("轻微震屏", if settings.screen_shake { "开" } else { "关" }.to_string()),
-        ("音乐音量", format!("{:>3}%", (settings.music_volume * 100.0).round() as i32)),
-        ("音效音量", format!("{:>3}%", (settings.sfx_volume * 100.0).round() as i32)),
+        ("音乐音量", format!("{}%", (settings.music_volume * 100.0).round() as i32)),
+        ("音效音量", format!("{}%", (settings.sfx_volume * 100.0).round() as i32)),
         ("按键配置", "P1 / P2".to_string()),
         ("返回卡带墙", String::new()),
     ];
     for (index, (label, value)) in rows.iter().enumerate() {
-        let y = 145.0 - index as f32 * 43.0;
-        if index == ui.settings_cursor {
-            rect(commands, Vec2::new(0.0, y), Vec2::new(600.0, 36.0), Color::srgb(0.13, 0.22, 0.32), MenuEntity);
-            rect(commands, Vec2::new(-285.0, y), Vec2::new(6.0, 30.0), Color::srgb(0.98, 0.82, 0.32), MenuEntity);
+        let y = px(48.0) - index as f32 * px(14.0);
+        let on = index == ui.settings_cursor;
+        if on {
+            rect(commands, Vec2::new(0.0, y), Vec2::new(px(208.0), px(13.0)), SURFACE_SEL, MenuEntity);
+            rect(commands, Vec2::new(px(-101.0), y), Vec2::new(px(2.0), px(11.0)), ACCENT, MenuEntity);
         }
-        text(commands, font, label, Vec2::new(-180.0, y), FONT_HEADING, Color::srgb(0.9, 0.94, 1.0), MenuEntity);
+        text_anchored(
+            commands, font, label, Vec2::new(px(-94.0), y), FONT_BODY,
+            if on { TEXT_PRIMARY } else { TEXT_MUTED }, Anchor::CENTER_LEFT, MenuEntity,
+        );
         if !value.is_empty() {
-            text(commands, font, &format!("◀  {value}  ▶"), Vec2::new(170.0, y), FONT_BODY, Color::srgb(1.0, 0.86, 0.42), MenuEntity);
+            let value_color = if on { ACCENT } else { TEXT_MUTED };
+            text(commands, font, value, Vec2::new(px(52.0), y), FONT_BODY, value_color, MenuEntity);
+            if on {
+                text(commands, font, "◀", Vec2::new(px(12.0), y), FONT_BODY, ACCENT, MenuEntity);
+                text(commands, font, "▶", Vec2::new(px(92.0), y), FONT_BODY, ACCENT, MenuEntity);
+            }
         }
     }
-    text(commands, font, "上下选择 · 左右调整 · 动作一确认 · 动作二返回", Vec2::new(0.0, -222.0), FONT_SMALL, Color::srgb(0.58, 0.72, 0.88), MenuEntity);
+    text(commands, font, "上下选择 · 左右调整 · 动作二返回", Vec2::new(0.0, px(-70.0)), FONT_BODY, TEXT_DIM, MenuEntity);
 }
 
 fn build_controls(commands: &mut Commands, font: &UiFont, save: &SaveData, ui: &MenuUiState) {
-    panel(commands, Vec2::ZERO, Vec2::new(690.0, 500.0), Color::srgb(0.055, 0.07, 0.105), Color::srgb(0.58, 0.86, 0.55), MenuEntity);
+    panel(commands, Vec2::ZERO, Vec2::new(px(232.0), px(174.0)), SURFACE, BORDER_DIM, MenuEntity);
     let player_label = if ui.control_player == PlayerSlot::One { "P1" } else { "P2" };
-    text(commands, font, &format!("按键配置 · {player_label}"), Vec2::new(0.0, 222.0), FONT_TITLE, Color::srgb(0.78, 1.0, 0.72), MenuEntity);
-    text(commands, font, "重置键切换玩家 · 左右选择键盘/手柄 · 动作一修改", Vec2::new(0.0, 188.0), FONT_SMALL, Color::srgb(0.62, 0.78, 0.9), MenuEntity);
+    text(commands, font, &format!("按键配置 · {player_label}"), Vec2::new(0.0, px(70.0)), FONT_TITLE, TEXT_PRIMARY, MenuEntity);
+
+    // 列头，这样每行的手柄值就能去掉「手柄 」前缀，否则右列会顶出面板
+    text(commands, font, "键盘", Vec2::new(px(24.0), px(50.0)), FONT_BODY, TEXT_DIM, MenuEntity);
+    text(commands, font, "手柄", Vec2::new(px(84.0), px(50.0)), FONT_BODY, TEXT_DIM, MenuEntity);
+
     let bindings = save.settings.bindings[ui.control_player.index()];
     for (row, action) in InputAction::ALL.iter().copied().enumerate() {
-        let y = 145.0 - row as f32 * 36.0;
-        if row == ui.control_cursor {
+        let y = px(36.0) - row as f32 * px(13.0);
+        let on = row == ui.control_cursor;
+        if on {
             let x = match ui.control_device {
-                CaptureDevice::Keyboard => 25.0,
-                CaptureDevice::Gamepad => 235.0,
+                CaptureDevice::Keyboard => px(24.0),
+                CaptureDevice::Gamepad => px(84.0),
             };
-            rect(commands, Vec2::new(x, y), Vec2::new(190.0, 30.0), Color::srgb(0.13, 0.25, 0.2), MenuEntity);
+            rect(commands, Vec2::new(x, y), Vec2::new(px(52.0), px(12.0)), SURFACE_SEL, MenuEntity);
         }
         let binding = bindings.binding(action);
-        text(commands, font, action.label(), Vec2::new(-235.0, y), FONT_BODY, Color::srgb(0.9, 0.94, 1.0), MenuEntity);
-        text(commands, font, binding.keyboard.label(), Vec2::new(25.0, y), FONT_SMALL, Color::srgb(1.0, 0.86, 0.42), MenuEntity);
-        text(commands, font, binding.gamepad.label(), Vec2::new(235.0, y), FONT_SMALL, Color::srgb(0.65, 0.88, 1.0), MenuEntity);
+        text_anchored(
+            commands, font, action.label(), Vec2::new(px(-108.0), y), FONT_BODY,
+            if on { TEXT_PRIMARY } else { TEXT_MUTED }, Anchor::CENTER_LEFT, MenuEntity,
+        );
+        text(commands, font, binding.keyboard.label(), Vec2::new(px(24.0), y), FONT_BODY,
+             if on && ui.control_device == CaptureDevice::Keyboard { ACCENT } else { TEXT_MUTED }, MenuEntity);
+        let pad = binding.gamepad.label();
+        let pad = pad.strip_prefix("手柄 ").unwrap_or(pad);
+        text(commands, font, pad, Vec2::new(px(84.0), y), FONT_BODY,
+             if on && ui.control_device == CaptureDevice::Gamepad { ACCENT } else { TEXT_MUTED }, MenuEntity);
     }
-    let footer = if let Some((player, action, device)) = ui.capture {
-        let who = if player == PlayerSlot::One { "P1" } else { "P2" };
-        let device = if device == CaptureDevice::Keyboard { "键盘按键" } else { "手柄按键" };
-        format!("等待输入：{who} {} 的{device} · Esc 取消", action.label())
+    let footer = if let Some((_, action, device)) = ui.capture {
+        let device = if device == CaptureDevice::Keyboard { "键盘" } else { "手柄" };
+        format!("等待{device}输入：{} · Esc 取消", action.label())
     } else {
-        "动作二 / Esc 返回设置".to_string()
+        "重置切玩家 · 动作一修改 · 动作二返回".to_string()
     };
-    text(commands, font, &footer, Vec2::new(0.0, -225.0), FONT_SMALL, Color::srgb(0.72, 0.9, 0.7), MenuEntity);
+    text(commands, font, &footer, Vec2::new(0.0, px(-80.0)), FONT_BODY,
+         if ui.capture.is_some() { ACCENT } else { TEXT_DIM }, MenuEntity);
 }
 
 fn build_menu(

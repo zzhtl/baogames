@@ -26,19 +26,14 @@ pub fn space_hud_update(
                 .find(|e| e.kind == EnemyKind::Boss)
                 .map(|e| e.hp.max(0))
                 .unwrap_or(0);
-            format!(
-                "BOSS [{}] {}/{}",
-                gauge(boss_hp, state.boss_hp_max, 12),
-                boss_hp,
-                state.boss_hp_max.max(1)
-            )
+            format!("BOSS {}", gauge(boss_hp, state.boss_hp_max, 6))
         } else {
             String::new()
         };
         set_text(
             &mut t,
             &format!(
-                "分数 {}\n纪录 {}\n生命 {}\n火力 LV.{}\n回避 x{}\n波次 {}/{}\n第 {} 关\n{}",
+                "分数 {}\n纪录 {}\n生命 {}\n火力 LV.{}\n回避 x{}\n波次 {}/{}\n{}",
                 session.score,
                 high,
                 session.lives.max(0),
@@ -46,7 +41,6 @@ pub fn space_hud_update(
                 state.rolls,
                 (state.wave_idx + 1).min(TOTAL_WAVES_BEFORE_BOSS),
                 TOTAL_WAVES_BEFORE_BOSS,
-                session.level,
                 boss_line
             ),
         );

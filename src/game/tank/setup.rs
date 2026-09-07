@@ -2,9 +2,11 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use std::time::Duration;
 
-use crate::common::constants::{FONT_BODY, FONT_HEADING};
+use crate::common::constants::{FONT_BODY, FONT_TITLE};
 use crate::common::render::{UiFont, attach_sprite_parts, rect, text};
-use crate::game::hud::hud_text;
+use bevy::sprite::Anchor;
+use crate::common::px::px;
+use crate::game::hud::{hud_panel, hud_text, hud_text_anchored};
 use crate::game::model::{Collider, GameEntity, Lifetime, Velocity};
 
 use super::components::*;
@@ -47,51 +49,30 @@ fn spawn_mode_select_ui(commands: &mut Commands, font: &UiFont) {
     let cy = PLAY_OFFSET_Y;
     // 半透明黑底覆盖游戏区，避免地形分散注意力
     commands.spawn((
-        Sprite::from_color(Color::srgba(0.0, 0.0, 0.0, 0.72), Vec2::splat(PLAY_SIZE)),
-        Transform::from_translation(Vec3::new(cx, cy, 50.0)),
+        Sprite::from_color(Color::srgb(0.02, 0.03, 0.05), Vec2::splat(PLAY_SIZE)),
+        // z 必须低于 Z_TEXT(10)：原来是 50，遮罩盖在自己的文字上面，
+        // 于是标题只剩 6% 不透明度，砖墙花纹反倒透出来。
+        Transform::from_translation(Vec3::new(cx, cy, 8.0)),
         ModeSelectUi,
         GameEntity,
     ));
+    let opt = |commands: &mut Commands, dy: f32, label: &str, color: Color| {
+        text(commands, font, label, Vec2::new(cx, cy + px(dy)), FONT_BODY, color, ModeSelectUi)
+            .insert(GameEntity);
+    };
     text(
         commands,
         font,
         "选择模式",
-        Vec2::new(cx, cy + 80.0),
-        34.0,
+        Vec2::new(cx, cy + px(26.0)),
+        FONT_TITLE,
         Color::srgb(1.0, 0.92, 0.5),
         ModeSelectUi,
     )
     .insert(GameEntity);
-    text(
-        commands,
-        font,
-        "动作一  单人模式",
-        Vec2::new(cx, cy + 20.0),
-        24.0,
-        Color::srgb(0.85, 0.78, 0.36),
-        ModeSelectUi,
-    )
-    .insert(GameEntity);
-    text(
-        commands,
-        font,
-        "动作二  双人模式",
-        Vec2::new(cx, cy - 20.0),
-        24.0,
-        Color::srgb(0.46, 0.7, 0.95),
-        ModeSelectUi,
-    )
-    .insert(GameEntity);
-    text(
-        commands,
-        font,
-        "按键可在系统设置中重映射",
-        Vec2::new(cx, cy - 80.0),
-        16.0,
-        Color::srgb(0.75, 0.82, 0.92),
-        ModeSelectUi,
-    )
-    .insert(GameEntity);
+    opt(commands, 4.0, "动作一  单人模式", Color::srgb(0.90, 0.82, 0.40));
+    opt(commands, -10.0, "动作二  双人模式", Color::srgb(0.50, 0.74, 0.98));
+    opt(commands, -30.0, "按键可在设置中重映射", Color::srgb(0.62, 0.70, 0.80));
 }
 
 pub fn spawn_initial_players_for_mode(commands: &mut Commands, two_player: bool) {
@@ -166,119 +147,61 @@ fn spawn_map(commands: &mut Commands, level: u8) {
 }
 
 fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
-    let hud_x = PLAY_OFFSET_X + PLAY_SIZE * 0.5 + 90.0;
-    hud_text(
+    // 右侧信息栏：标签左对齐、数值右对齐，全部落在画布像素网格上。
+    // 原来是「标签一行、数值另起一行」的双行块，字号放大到原生 12px 后会互相压住。
+    const LEFT: f32 = 36.0;
+    const RIGHT: f32 = 114.0;
+    hud_panel(
         commands,
-        font,
         hud_root,
-        "关卡",
-        Vec2::new(hud_x, PLAY_OFFSET_Y + PLAY_SIZE * 0.5 - 24.0),
-        FONT_BODY,
-        Color::srgb(0.85, 0.85, 0.85),
-        (),
+        Vec2::new(px(75.0), px(14.0)),
+        Vec2::new(px(84.0), px(104.0)),
+        Color::srgb(0.05, 0.09, 0.06),
+        Color::srgb(0.30, 0.52, 0.32),
     );
     hud_text(
-        commands,
-        font,
-        hud_root,
-        &format!("{}", level),
-        Vec2::new(hud_x, PLAY_OFFSET_Y + PLAY_SIZE * 0.5 - 50.0),
-        28.0,
-        Color::srgb(1.0, 0.85, 0.3),
-        (),
+        commands, font, hud_root, "坦克大战",
+        Vec2::new(px(75.0), px(56.0)), FONT_BODY, Color::srgb(0.62, 0.90, 0.66), (),
+    );
+
+    let row = |commands: &mut Commands, y: f32, label: &str, value: &str,
+                   color: Color, extra: TankHud| {
+        hud_text_anchored(
+            commands, font, hud_root, label, Vec2::new(px(LEFT), px(y)),
+            FONT_BODY, Color::srgb(0.60, 0.68, 0.62), Anchor::CENTER_LEFT, (),
+        );
+        hud_text_anchored(
+            commands, font, hud_root, value, Vec2::new(px(RIGHT), px(y)),
+            FONT_BODY, color, Anchor::CENTER_RIGHT, extra,
+        );
+    };
+    row(commands, 40.0, "关卡", &level.to_string(), Color::srgb(1.0, 0.85, 0.3),
+        TankHud { kind: TankHudKind::Stage });
+    row(commands, 26.0, "剩余", "20", Color::srgb(0.95, 0.6, 0.4),
+        TankHud { kind: TankHudKind::Enemies });
+    row(commands, 12.0, "P1", "×2", Color::srgb(0.85, 0.78, 0.36),
+        TankHud { kind: TankHudKind::P1Lives });
+
+    // P2 那行要能整行隐藏，所以标签也挂 P2Hud
+    hud_text_anchored(
+        commands, font, hud_root, "P2", Vec2::new(px(LEFT), px(-2.0)),
+        FONT_BODY, Color::srgb(0.60, 0.68, 0.62), Anchor::CENTER_LEFT, P2Hud,
+    );
+    hud_text_anchored(
+        commands, font, hud_root, "×2", Vec2::new(px(RIGHT), px(-2.0)),
+        FONT_BODY, Color::srgb(0.46, 0.7, 0.95), Anchor::CENTER_RIGHT,
+        (TankHud { kind: TankHudKind::P2Lives }, P2Hud),
+    );
+
+    hud_text(
+        commands, font, hud_root, "BASE OK",
+        Vec2::new(px(75.0), px(-22.0)), FONT_BODY, Color::srgb(0.42, 0.86, 0.46),
+        TankHud { kind: TankHudKind::Base },
     );
     hud_text(
-        commands,
-        font,
-        hud_root,
-        "敌方剩余",
-        Vec2::new(hud_x, PLAY_OFFSET_Y + 50.0),
-        FONT_BODY,
-        Color::srgb(0.85, 0.85, 0.85),
-        (),
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "20",
-        Vec2::new(hud_x, PLAY_OFFSET_Y + 20.0),
-        26.0,
-        Color::srgb(0.95, 0.6, 0.4),
-        TankHud {
-            kind: TankHudKind::Enemies,
-        },
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "P1",
-        Vec2::new(hud_x - 22.0, PLAY_OFFSET_Y - 60.0),
-        FONT_HEADING,
-        Color::srgb(0.85, 0.78, 0.36),
-        (),
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "P2",
-        Vec2::new(hud_x + 22.0, PLAY_OFFSET_Y - 60.0),
-        FONT_HEADING,
-        Color::srgb(0.46, 0.7, 0.95),
-        P2Hud,
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "×2",
-        Vec2::new(hud_x - 22.0, PLAY_OFFSET_Y - 92.0),
-        FONT_BODY,
-        Color::srgb(0.85, 0.78, 0.36),
-        TankHud {
-            kind: TankHudKind::P1Lives,
-        },
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "×2",
-        Vec2::new(hud_x + 22.0, PLAY_OFFSET_Y - 92.0),
-        FONT_BODY,
-        Color::srgb(0.46, 0.7, 0.95),
-        (
-            TankHud {
-                kind: TankHudKind::P2Lives,
-            },
-            P2Hud,
-        ),
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "BASE OK",
-        Vec2::new(hud_x, PLAY_OFFSET_Y - 142.0),
-        18.0,
-        Color::srgb(0.42, 0.86, 0.46),
-        TankHud {
-            kind: TankHudKind::Base,
-        },
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "",
-        Vec2::new(hud_x, PLAY_OFFSET_Y - 174.0),
-        17.0,
-        Color::srgb(0.72, 0.60, 1.0),
-        TankHud {
-            kind: TankHudKind::Freeze,
-        },
+        commands, font, hud_root, "",
+        Vec2::new(px(75.0), px(-36.0)), FONT_BODY, Color::srgb(0.72, 0.60, 1.0),
+        TankHud { kind: TankHudKind::Freeze },
     );
 }
 

@@ -1,9 +1,11 @@
 use bevy::prelude::*;
 use rand::prelude::*;
 
-use crate::common::constants::{FONT_HEADING, FONT_SMALL};
+use crate::common::constants::{FONT_BODY};
 use crate::common::render::{UiFont, panel, rect, text};
-use crate::game::hud::{hud_panel, hud_text};
+use bevy::sprite::Anchor;
+use crate::common::px::px;
+use crate::game::hud::{hud_panel, hud_text, hud_text_anchored};
 use crate::game::model::GameEntity;
 
 use super::components::*;
@@ -64,7 +66,7 @@ pub fn setup_stage(
         shots_left_for_descend: max_shots,
         max_shots_per_descend: max_shots,
         colors_count,
-        message: format!("第 {} 关 - 三连同色消除", level),
+        message: "三连同色消除".to_string(),
         message_clock: 2.4,
         flash_clock: 0.0,
         recoil_clock: 0.0,
@@ -305,56 +307,28 @@ fn spawn_aim_dots(commands: &mut Commands, assets: &BubbleAssets, current: u8) {
 }
 
 fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
-    let hud_x = PLAY_RIGHT + 110.0;
     hud_panel(
         commands,
         hud_root,
-        Vec2::new(hud_x, 180.0),
-        Vec2::new(180.0, 230.0),
-        Color::srgb(1.0, 0.94, 0.88),
+        Vec2::new(px(80.0), px(30.0)),
+        Vec2::new(px(76.0), px(112.0)),
+        Color::srgb(0.10, 0.07, 0.12),
         Color::srgb(0.96, 0.66, 0.84),
     );
     hud_text(
-        commands,
-        font,
-        hud_root,
-        "泡泡龙",
-        Vec2::new(hud_x, 244.0),
-        FONT_HEADING,
-        Color::srgb(0.94, 0.38, 0.62),
-        (),
+        commands, font, hud_root, "泡泡龙",
+        Vec2::new(px(80.0), px(78.0)), FONT_BODY, Color::srgb(0.98, 0.62, 0.82), (),
     );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "P1\n左右瞄准\n动作一发射\n开始键暂停",
-        Vec2::new(hud_x, 174.0),
-        FONT_SMALL,
-        Color::srgb(0.45, 0.32, 0.5),
-        (),
-    );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "",
-        Vec2::new(hud_x, 110.0),
-        16.0,
-        Color::srgb(0.78, 0.42, 0.18),
-        BubbleHud,
+    hud_text_anchored(
+        commands, font, hud_root, "",
+        Vec2::new(px(46.0), px(68.0)), FONT_BODY,
+        Color::srgb(0.92, 0.86, 0.96), Anchor::TOP_LEFT, BubbleHud,
     );
 
-    // 中央提示
     hud_text(
-        commands,
-        font,
-        hud_root,
-        "",
-        Vec2::new(PLAY_OFFSET_X, PLAY_TOP - 56.0),
-        24.0,
-        Color::srgb(0.94, 0.46, 0.32),
-        BubbleMessage,
+        commands, font, hud_root, "",
+        Vec2::new(PLAY_OFFSET_X, px(-62.0)), FONT_BODY,
+        Color::srgb(0.86, 0.32, 0.52), BubbleMessage,
     );
 }
 

@@ -2,10 +2,12 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use std::time::Duration;
 
-use crate::common::constants::{FONT_BODY, FONT_HEADING, FONT_SMALL};
+use crate::common::constants::{FONT_BODY};
 use crate::common::render::{UiFont, attach_sprite_parts, rect, text};
 use crate::common::sprite_def::SpriteDef;
-use crate::game::hud::hud_text;
+use bevy::sprite::Anchor;
+use crate::common::px::px;
+use crate::game::hud::{hud_text, hud_text_anchored};
 use crate::game::model::{Collider, GameEntity};
 
 use super::components::*;
@@ -422,74 +424,61 @@ pub fn spawn_bm_exit(commands: &mut Commands, col: i32, row: i32) {
 
 // ========== HUD ==========
 fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity, level: u8) {
-    let hud_x = BM_OFFSET_X + BM_PLAY_W * 0.5 + 95.0;
-    let top_y = BM_OFFSET_Y + BM_PLAY_H * 0.5;
-    let label_color = Color::srgb(0.85, 0.85, 0.85);
+    // 迷宫 15×11 格、每格 12 画布像素 = 180 像素宽，右侧只剩 54 像素给信息栏，
+    // 所以标签用 2 字、数值右对齐贴住画布右缘。
+    const LEFT: f32 = 66.0;
+    const RIGHT: f32 = 116.0;
+    let label_color = Color::srgb(0.68, 0.64, 0.60);
 
     hud_text(
-        commands,
-        font,
-        hud_root,
-        "炸弹迷宫",
-        Vec2::new(hud_x, top_y - 18.0),
-        FONT_HEADING,
-        Color::srgb(0.95, 0.78, 0.32),
-        (),
+        commands, font, hud_root, "炸弹迷宫",
+        Vec2::new(px(91.0), px(76.0)), FONT_BODY, Color::srgb(0.95, 0.78, 0.32), (),
     );
 
-    // 标签 + 数值对：关卡 / 时间 / 得分 / 敌人
     let stats: [(&str, f32, String, Color, BMHud); 4] = [
-        ("关卡", top_y - 50.0, format!("{}", level), Color::srgb(1.0, 0.85, 0.3), BMHud::Stage),
-        ("时间", top_y - 110.0, "200".into(), Color::srgb(0.45, 0.85, 1.0), BMHud::Time),
-        ("得分", top_y - 168.0, "0".into(), Color::srgb(0.95, 0.6, 0.4), BMHud::Score),
-        ("敌人", top_y - 226.0, "-".into(), Color::srgb(0.95, 0.4, 0.4), BMHud::Enemies),
+        ("关卡", 58.0, format!("{level}"), Color::srgb(1.0, 0.85, 0.3), BMHud::Stage),
+        ("时间", 44.0, "200".into(), Color::srgb(0.45, 0.85, 1.0), BMHud::Time),
+        ("得分", 30.0, "0".into(), Color::srgb(0.95, 0.6, 0.4), BMHud::Score),
+        ("敌人", 16.0, "-".into(), Color::srgb(0.95, 0.4, 0.4), BMHud::Enemies),
     ];
-    for (name, label_y, value, value_color, marker) in stats {
-        hud_text(commands, font, hud_root, name, Vec2::new(hud_x, label_y), FONT_SMALL, label_color, ());
-        hud_text(commands, font, hud_root, &value, Vec2::new(hud_x, label_y - 29.0), FONT_HEADING, value_color, marker);
-    }
-
-    // P1 / P2 命数
-    for (dx, name, color, marker) in [
-        (-22.0, "P1", Color::srgb(0.4, 0.66, 0.96), BMHud::P1Lives),
-        (22.0, "P2", Color::srgb(0.96, 0.45, 0.45), BMHud::P2Lives),
-    ] {
-        hud_text(commands, font, hud_root, name, Vec2::new(hud_x + dx, top_y - 290.0), FONT_SMALL, color, ());
-        hud_text(
-            commands,
-            font,
-            hud_root,
-            "x3",
-            Vec2::new(hud_x + dx, top_y - 318.0),
-            FONT_SMALL,
-            Color::srgb(0.95, 0.95, 0.95),
-            marker,
+    for (name, y, value, value_color, marker) in stats {
+        hud_text_anchored(
+            commands, font, hud_root, name, Vec2::new(px(LEFT), px(y)),
+            FONT_BODY, label_color, Anchor::CENTER_LEFT, (),
         );
-        let power_marker = if matches!(marker, BMHud::P1Lives) {
-            BMHud::P1Power
-        } else {
-            BMHud::P2Power
-        };
-        hud_text(
-            commands,
-            font,
-            hud_root,
-            "弹1 火1",
-            Vec2::new(hud_x + dx, top_y - 348.0),
-            15.0,
-            color,
-            power_marker,
+        hud_text_anchored(
+            commands, font, hud_root, &value, Vec2::new(px(RIGHT), px(y)),
+            FONT_BODY, value_color, Anchor::CENTER_RIGHT, marker,
         );
     }
 
+    // P1 / P2：命数与道具等级各占一行
+    for (i, (name, color, lives, power)) in [
+        ("P1", Color::srgb(0.4, 0.66, 0.96), BMHud::P1Lives, BMHud::P1Power),
+        ("P2", Color::srgb(0.96, 0.45, 0.45), BMHud::P2Lives, BMHud::P2Power),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let y = -2.0 - i as f32 * 28.0;
+        hud_text_anchored(
+            commands, font, hud_root, name, Vec2::new(px(LEFT), px(y)),
+            FONT_BODY, color, Anchor::CENTER_LEFT, (),
+        );
+        hud_text_anchored(
+            commands, font, hud_root, "x3", Vec2::new(px(RIGHT), px(y)),
+            FONT_BODY, Color::srgb(0.92, 0.92, 0.92), Anchor::CENTER_RIGHT, lives,
+        );
+        hud_text_anchored(
+            commands, font, hud_root, "弹1 火1", Vec2::new(px(RIGHT), px(y - 13.0)),
+            FONT_BODY, color, Anchor::CENTER_RIGHT, power,
+        );
+    }
+
+    // 底部状态条，压在迷宫下方的空白里
     hud_text(
-        commands,
-        font,
-        hud_root,
-        "炸开软砖，找到出口逃出迷宫！",
-        Vec2::new(0.0, BM_OFFSET_Y - BM_PLAY_H * 0.5 - 24.0),
-        FONT_BODY,
-        Color::srgb(0.85, 0.92, 1.0),
-        BMHud::Status,
+        commands, font, hud_root, "炸开软砖，找到出口",
+        Vec2::new(px(-28.0), px(-80.0)), FONT_BODY,
+        Color::srgb(0.85, 0.92, 1.0), BMHud::Status,
     );
 }

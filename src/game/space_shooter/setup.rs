@@ -2,10 +2,12 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use std::time::Duration;
 
-use crate::common::constants::{FONT_HEADING, FONT_SMALL};
+use crate::common::constants::{FONT_BODY};
 use crate::common::render::{UiFont, attach_sprite_parts, rect};
 use crate::common::sprite_def::SpriteDef;
-use crate::game::hud::{hud_panel, hud_text};
+use bevy::sprite::Anchor;
+use crate::common::px::{px, snap};
+use crate::game::hud::{hud_panel, hud_text, hud_text_anchored};
 use crate::game::model::{Collider, GameEntity, Lifetime};
 
 use super::components::*;
@@ -41,41 +43,32 @@ pub fn setup_stage(commands: &mut Commands, font: &UiFont, hud_root: Entity, lev
 }
 
 fn paint_background(commands: &mut Commands) {
-    // 太空背景：深蓝渐变
-    rect(
-        commands,
-        Vec2::new(PLAY_OFFSET_X, 0.0),
-        Vec2::new(PLAY_W, PLAY_H),
-        Color::srgb(0.02, 0.04, 0.09),
-        GameEntity,
-    );
-    // 上下两条带让视觉更有层次
-    rect(
-        commands,
-        Vec2::new(PLAY_OFFSET_X, PLAY_TOP - 40.0),
-        Vec2::new(PLAY_W, 80.0),
-        Color::srgb(0.04, 0.06, 0.13),
-        GameEntity,
-    );
-    rect(
-        commands,
-        Vec2::new(PLAY_OFFSET_X, PLAY_BOTTOM + 40.0),
-        Vec2::new(PLAY_W, 80.0),
-        Color::srgb(0.04, 0.06, 0.13),
-        GameEntity,
-    );
+    // 层级必须夹在关卡底板(-10)和星空(-0.5)之间：
+    // 画在 z=0（rect 的默认层）会把整片星空盖掉，画在 -10 又会和关卡底板抢同一层。
+    let mut band = |y: f32, h: f32, color: Color, z: f32| {
+        commands.spawn((
+            Sprite::from_color(color, Vec2::new(PLAY_W, h)),
+            Transform::from_translation(Vec3::new(PLAY_OFFSET_X, y, z)),
+            GameEntity,
+        ));
+    };
+    band(0.0, PLAY_H, Color::srgb(0.02, 0.04, 0.09), Z_SPACE_BG);
+    band(PLAY_TOP - 40.0, 80.0, Color::srgb(0.04, 0.06, 0.13), Z_SPACE_BAND);
+    band(PLAY_BOTTOM + 40.0, 80.0, Color::srgb(0.04, 0.06, 0.13), Z_SPACE_BAND);
 }
 
 fn spawn_starfield(commands: &mut Commands) {
     let mut rng = thread_rng();
     for _ in 0..70 {
-        let x = rng.gen_range(PLAY_LEFT + 4.0..PLAY_RIGHT - 4.0);
-        let y = rng.gen_range(PLAY_BOTTOM..PLAY_TOP);
+        let x = snap(rng.gen_range(PLAY_LEFT + px(2.0)..PLAY_RIGHT - px(2.0)));
+        let y = snap(rng.gen_range(PLAY_BOTTOM..PLAY_TOP));
         let layer: u8 = rng.gen_range(0..3);
+        // 尺寸必须是整画布像素：原来的 1.5~2.6 世界单位只有 0.5~0.87 像素，
+        // Msaa::Off 下整片星空直接不可见，战场是纯黑的。
         let (size, brightness, speed) = match layer {
-            0 => (1.5, 0.32, 50.0),
-            1 => (2.0, 0.55, 90.0),
-            _ => (2.6, 0.85, 140.0),
+            0 => (px(1.0), 0.34, 50.0),
+            1 => (px(1.0), 0.62, 90.0),
+            _ => (px(2.0), 0.92, 140.0),
         };
         let mut cmd = rect(
             commands,
@@ -131,57 +124,31 @@ fn paint_frame(commands: &mut Commands) {
 }
 
 fn spawn_hud(commands: &mut Commands, font: &UiFont, hud_root: Entity) {
-    let hud_x = PLAY_RIGHT + 110.0;
+    // 右侧信息栏：从战场右边界排到画布右缘。原来面板只有 60 画布像素宽，
+    // 里面塞的却是「动作一射击 · 动作二翻滚」这种 144 像素的整句，必然出屏。
     hud_panel(
         commands,
         hud_root,
-        Vec2::new(hud_x, 145.0),
-        Vec2::new(180.0, 300.0),
+        Vec2::new(px(79.0), px(30.0)),
+        Vec2::new(px(78.0), px(112.0)),
         Color::srgb(0.06, 0.08, 0.14),
         Color::srgb(0.36, 0.48, 0.78),
     );
     hud_text(
-        commands,
-        font,
-        hud_root,
-        "太空射击",
-        Vec2::new(hud_x, 244.0),
-        FONT_HEADING,
-        Color::srgb(0.78, 0.92, 1.0),
-        (),
+        commands, font, hud_root, "太空射击",
+        Vec2::new(px(79.0), px(78.0)), FONT_BODY, Color::srgb(0.78, 0.92, 1.0), (),
     );
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "P1\n方向移动\n动作一射击 · 动作二翻滚\n开始键暂停",
-        Vec2::new(hud_x, 185.0),
-        FONT_SMALL,
-        Color::srgb(0.7, 0.84, 1.0),
-        (),
+    hud_text_anchored(
+        commands, font, hud_root, "",
+        Vec2::new(px(44.0), px(68.0)), FONT_BODY,
+        Color::srgb(0.86, 0.94, 1.0), Anchor::TOP_LEFT, SpaceHud,
     );
 
+    // 战场中央的瞬时提示
     hud_text(
-        commands,
-        font,
-        hud_root,
-        "",
-        Vec2::new(hud_x, 80.0),
-        16.0,
-        Color::srgb(1.0, 0.94, 0.7),
-        SpaceHud,
-    );
-
-    // 居中提示
-    hud_text(
-        commands,
-        font,
-        hud_root,
-        "",
-        Vec2::new(PLAY_OFFSET_X, PLAY_TOP - 60.0),
-        24.0,
-        Color::srgb(1.0, 0.92, 0.5),
-        SpaceMessageText,
+        commands, font, hud_root, "",
+        Vec2::new(PLAY_OFFSET_X, PLAY_TOP - px(20.0)), FONT_BODY,
+        Color::srgb(1.0, 0.92, 0.5), SpaceMessageText,
     );
 }
 

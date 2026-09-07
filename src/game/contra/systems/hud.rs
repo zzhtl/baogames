@@ -22,7 +22,9 @@ pub fn contra_hud_update(
     boss_q: Query<&ContraBoss>,
     mut hud_text_q: Query<(&mut Text2d, &ContraHud), Without<Sprite>>,
     mut hud_sprite_q: Query<(&mut Sprite, &ContraHud, Option<&mut Visibility>), Without<Text2d>>,
-    mut life_icons_q: Query<(&ContraHudLifeIcon, &mut Visibility)>,
+    // Without<ContraHud>：和 hud_sprite_q 同样要 &mut Visibility，
+    // 不显式拆开的话 Bevy 判定为冲突，系统初始化就 panic(B0001)。
+    mut life_icons_q: Query<(&ContraHudLifeIcon, &mut Visibility), Without<ContraHud>>,
 ) {
     let weapon = player_q.single().map(|p| p.weapon).unwrap_or(Weapon::M);
     let boss_hp = boss_q.single().ok().map(|b| (b.hp, b.die_t));

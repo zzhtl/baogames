@@ -110,20 +110,20 @@ pub fn mario_powerup_update(
 pub fn mario_player_vs_powerup(
     mut commands: Commands,
     mut session: ResMut<GameSession>,
-    mut player_q: Query<(Entity, &mut MarioPlayer, &Transform), Without<PowerUp>>,
+    mut player_q: Query<(Entity, &mut MarioPlayer, &mut Transform), Without<PowerUp>>,
     powerup_q: Query<(Entity, &PowerUp, &Transform), Without<MarioPlayer>>,
     mut sfx: MessageWriter<PlaySfx>,
 ) {
     if session.paused || session.finished {
         return;
     }
-    let Ok((player_e, mut player, ptr)) = player_q.single_mut() else {
+    let Ok((player_e, mut player, mut player_tr)) = player_q.single_mut() else {
         return;
     };
     if player.dead_timer > 0.0 || player.finished {
         return;
     }
-    let p_pos = ptr.translation.truncate();
+    let p_pos = player_tr.translation.truncate();
     let p_size = player.state.size();
     let pu_size = Vec2::splat(POWERUP_SIZE);
     for (e, pu, ptr2) in &powerup_q {
@@ -135,7 +135,7 @@ pub fn mario_player_vs_powerup(
         match pu.kind {
             PowerUpKind::Mushroom => {
                 if matches!(player.state, PowerState::Small) {
-                    upgrade_player(&mut commands, player_e, &mut player, PowerState::Big);
+                    upgrade_player(&mut commands, player_e, &mut player, &mut player_tr, PowerState::Big);
                 }
                 session.score = session.score.saturating_add(1000);
             }
@@ -145,7 +145,7 @@ pub fn mario_player_vs_powerup(
                     PowerState::Big | PowerState::Fire => PowerState::Fire,
                 };
                 if next != player.state {
-                    upgrade_player(&mut commands, player_e, &mut player, next);
+                    upgrade_player(&mut commands, player_e, &mut player, &mut player_tr, next);
                 }
                 session.score = session.score.saturating_add(1000);
             }
@@ -162,12 +162,19 @@ pub fn mario_player_vs_powerup(
     }
 }
 
+/// 换体型的同时把中心上抬半个身高差，让脚底留在原处。
+///
+/// 只改 `state` 的话，小马里奥(42 高)变大(66 高)后中心不动 = 脚底下沉 12 单位，
+/// 直接埋进地砖；下一帧的地形解算会把这 12 单位的重叠沿 X 轴推出去几十单位。
+/// 魂斗罗切趴下/起身早就做了同样的补偿（contra/systems/input.rs），这里漏了。
 fn upgrade_player(
     commands: &mut Commands,
     player_e: Entity,
     player: &mut MarioPlayer,
+    tr: &mut Transform,
     target: PowerState,
 ) {
+    tr.translation.y += (target.size().y - player.state.size().y) * 0.5;
     player.state = target;
     player.transform_t = 0.6;
     commands.entity(player_e).despawn_related::<Children>();

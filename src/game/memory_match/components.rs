@@ -44,5 +44,9 @@ pub struct CardCursor {
 #[derive(Component)]
 pub struct MemoryHud;
 
+/// 底栏左侧的分数 / 纪录。
+#[derive(Component)]
+pub struct MemoryScoreHud;
+
 #[derive(Component)]
 pub struct MemoryMessage;

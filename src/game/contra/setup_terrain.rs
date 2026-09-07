@@ -602,7 +602,9 @@ pub fn spawn_bridge(commands: &mut Commands, x_start: f32, x_end: f32) {
             GameEntity,
         ));
     }
-    let plank_top = GROUND_TOP - 1.0;
+    // 桥面必须与陆地顶面齐平：低 1 单位会让站在桥上的人与陆地碰撞体重叠，
+    // 每帧被沿 X 轴推回岸边，形成一堵走不过去的隐形墙。
+    let plank_top = GROUND_TOP;
     commands.spawn((
         Sprite::from_color(COLOR_BRIDGE_ROPE, Vec2::new(w, 2.0)),
         Transform::from_translation(Vec3::new(cx, GROUND_TOP + 28.0, Z_TILE + 0.11)),

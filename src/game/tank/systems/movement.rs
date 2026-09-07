@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use crate::common::collide::{Solid as Solid_, depenetrate};
 use crate::game::model::{Collider, GameKind, GameSession};
 
 use super::super::components::*;
@@ -89,34 +90,44 @@ pub fn tank_movement(
         );
 
         let tank_size = Vec2::splat(TANK_SIZE - 2.0);
-        let mut blocked = false;
-        for (bp, bs) in &blocker_data {
-            if aabb_overlap(clamped, tank_size, *bp, *bs) {
-                blocked = true;
-                break;
-            }
+        let blocked_at = |p: Vec2| {
+            blocker_data
+                .iter()
+                .any(|(bp, bs)| aabb_overlap(p, tank_size, *bp, *bs))
+                || tank_data
+                    .iter()
+                    .any(|(e, op, os)| *e != self_entity && aabb_overlap(p, tank_size, *op, *os))
+        };
+
+        // 分轴回退：整体走不动就单轴试一次，贴着墙也能滑过去。
+        // 原来是「全或无」——新位置一重叠就整帧不动，而坦克 collider 30 对通道 32
+        // 单侧只有 1 单位余量，一旦被别的坦克或铲子刷出的钢墙压住就四个方向全阻塞，
+        // 永久冻结且没有任何自愈路径。
+        let here = tf.translation.truncate();
+        let mut next = here;
+        if !blocked_at(Vec2::new(clamped.x, here.y)) {
+            next.x = clamped.x;
         }
-        if !blocked {
-            for (other_e, op, os) in &tank_data {
-                if *other_e == self_entity {
-                    continue;
-                }
-                if aabb_overlap(clamped, tank_size, *op, *os) {
-                    blocked = true;
-                    break;
-                }
-            }
+        if !blocked_at(Vec2::new(next.x, clamped.y)) {
+            next.y = clamped.y;
         }
-        if !blocked {
-            let moved = tf.translation.truncate().distance_squared(clamped) > 0.001;
-            tf.translation.x = clamped.x;
-            tf.translation.y = clamped.y;
-            tank.moving = moved;
-            if moved {
-                tank.motion_t += delta;
-            }
-        } else {
+        if next == here {
             tank.coast_left = 0.0;
+            if blocked_at(here) {
+                // 已经被封在墙里：沿最小穿透轴顶出去，别把玩家永久卡死
+                let solids: Vec<Solid_> = blocker_data
+                    .iter()
+                    .map(|(bp, bs)| Solid_::fixed(*bp, *bs))
+                    .collect();
+                next = depenetrate(here, tank_size, &solids);
+            }
+        }
+        let moved = here.distance_squared(next) > 0.001;
+        tf.translation.x = next.x;
+        tf.translation.y = next.y;
+        tank.moving = moved;
+        if moved {
+            tank.motion_t += delta;
         }
     }
 }

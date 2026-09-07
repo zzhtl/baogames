@@ -34,14 +34,10 @@ pub fn setup_stage(
     spawn_ground_run(commands, 2480.0, 3700.0, GROUND_TOP);
     spawn_ground_run(commands, 3700.0, WORLD_W, GROUND_TOP);
 
-    // 高处岩石平台
-    spawn_platform(commands, Vec2::new(560.0, GROUND_TOP + TILE * 4.0), 144.0);
-    spawn_platform(commands, Vec2::new(820.0, GROUND_TOP + TILE * 6.0), 96.0);
-    spawn_platform(commands, Vec2::new(1660.0, GROUND_TOP + TILE * 3.5), 192.0);
-    spawn_platform(commands, Vec2::new(1900.0, GROUND_TOP + TILE * 6.0), 120.0);
-    spawn_platform(commands, Vec2::new(2680.0, GROUND_TOP + TILE * 5.0), 168.0);
-    spawn_platform(commands, Vec2::new(3220.0, GROUND_TOP + TILE * 4.0), 200.0);
-    spawn_platform(commands, Vec2::new(3520.0, GROUND_TOP + TILE * 6.5), 120.0);
+    // 高处岩石平台（布局见 constants::PLATFORMS，可达性有单测保证）
+    for (x, top, w) in PLATFORMS {
+        spawn_platform(commands, Vec2::new(x, GROUND_TOP + top), w);
+    }
 
     // 玩家
     let player_spawn = Vec2::new(200.0, GROUND_TOP + PLAYER_H * 0.5);
@@ -182,28 +178,28 @@ fn build_enemy_marks_l1() -> Vec<EnemySpawnMark> {
     vec![
         // 段 1
         mk(200.0, Vec2::new(360.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
-        mk(280.0, Vec2::new(560.0, GROUND_TOP + TILE * 4.0 + ENEMY_H * 0.5), EnemyKind::Sniper),
+        mk(280.0, Vec2::new(PLATFORMS[0].0, GROUND_TOP + PLATFORMS[0].1 + ENEMY_H * 0.5), EnemyKind::Sniper),
         mk(360.0, Vec2::new(740.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
-        mk(480.0, Vec2::new(820.0, GROUND_TOP + TILE * 6.0 + ENEMY_H * 0.5), EnemyKind::Jumper),
+        mk(480.0, Vec2::new(PLATFORMS[1].0, GROUND_TOP + PLATFORMS[1].1 + ENEMY_H * 0.5), EnemyKind::Jumper),
         // 段 2 之前 (跨水)
         mk(680.0, Vec2::new(960.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
         mk(880.0, Vec2::new(1060.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
         // 段 2
         mk(1100.0, Vec2::new(1380.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
-        mk(1280.0, Vec2::new(1660.0, GROUND_TOP + TILE * 3.5 + ENEMY_H * 0.5), EnemyKind::Sniper),
+        mk(1280.0, Vec2::new(PLATFORMS[2].0, GROUND_TOP + PLATFORMS[2].1 + ENEMY_H * 0.5), EnemyKind::Sniper),
         mk(1380.0, Vec2::new(1780.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
-        mk(1500.0, Vec2::new(1900.0, GROUND_TOP + TILE * 6.0 + ENEMY_H * 0.5), EnemyKind::Jumper),
+        mk(1500.0, Vec2::new(PLATFORMS[3].0, GROUND_TOP + PLATFORMS[3].1 + ENEMY_H * 0.5), EnemyKind::Jumper),
         mk(1700.0, Vec2::new(2080.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
         mk(1840.0, Vec2::new(2200.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
         // 段 3
         mk(2200.0, Vec2::new(2520.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
-        mk(2360.0, Vec2::new(2680.0, GROUND_TOP + TILE * 5.0 + ENEMY_H * 0.5), EnemyKind::Sniper),
+        mk(2360.0, Vec2::new(PLATFORMS[4].0, GROUND_TOP + PLATFORMS[4].1 + ENEMY_H * 0.5), EnemyKind::Sniper),
         mk(2520.0, Vec2::new(2820.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
         mk(2680.0, Vec2::new(2960.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
         mk(2800.0, Vec2::new(3100.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
-        mk(2960.0, Vec2::new(3220.0, GROUND_TOP + TILE * 4.0 + ENEMY_H * 0.5), EnemyKind::Sniper),
+        mk(2960.0, Vec2::new(PLATFORMS[5].0, GROUND_TOP + PLATFORMS[5].1 + ENEMY_H * 0.5), EnemyKind::Sniper),
         mk(3060.0, Vec2::new(3360.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
-        mk(3180.0, Vec2::new(3520.0, GROUND_TOP + TILE * 6.5 + ENEMY_H * 0.5), EnemyKind::Jumper),
+        mk(3180.0, Vec2::new(PLATFORMS[6].0, GROUND_TOP + PLATFORMS[6].1 + ENEMY_H * 0.5), EnemyKind::Jumper),
         mk(3260.0, Vec2::new(3600.0, GROUND_TOP + ENEMY_H * 0.5), EnemyKind::Soldier),
     ]
 }

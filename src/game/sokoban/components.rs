@@ -22,5 +22,9 @@ pub struct SokoPlayer;
 #[derive(Component)]
 pub struct SokobanHud;
 
+/// 底栏左侧的分数 / 纪录。
+#[derive(Component)]
+pub struct SokobanScoreHud;
+
 #[derive(Component)]
 pub struct SokobanMessage;

@@ -4,7 +4,9 @@ use crate::game::model::GameSession;
 
 use super::super::components::*;
 use super::super::constants::*;
-use super::super::geometry::{aabb_overlap, player_size};
+use crate::common::collide::{Solid as Solid_, resolve};
+
+use super::super::geometry::player_size;
 use super::super::resources::ContraStage;
 
 pub fn contra_physics(
@@ -40,18 +42,28 @@ pub fn contra_physics(
     player.vel.y = player.vel.y.max(-FALL_MAX);
     let fall_speed = (-player.vel.y).max(0.0);
 
-    let mut pos = tr.translation.truncate();
     let p_size = player_size(player.prone);
+    // 与超级玛丽同源的公共解算：先脱困再分轴推进。
+    // 旧写法在 X 轴上无条件按穿透深度整体推出，木桥比陆地低 1 单位时
+    // 会把人每帧顶回岸边（走不上岸），近跳跃顶点时又会把人瞬移到平台上面。
+    let shapes: Vec<Solid_> = solid_q
+        .iter()
+        .map(|(st, s)| Solid_::fixed(st.translation.truncate(), s.size))
+        .collect();
+    let resolved = resolve(tr.translation.truncate(), p_size, player.vel, dt, &shapes);
+    let mut pos = resolved.pos;
+    player.vel = resolved.vel;
+    player.on_ground = resolved.on_ground;
+    let on_ground = resolved.on_ground;
 
-    pos.x += player.vel.x * dt;
-    let left_min = 110.0 + PLAYER_W * 0.5;
+    let left_min = 110.0 + p_size.x * 0.5;
     if pos.x < left_min {
         pos.x = left_min;
         player.vel.x = 0.0;
     }
-    let mut right_max = WORLD_W - PLAYER_W * 0.5;
+    let mut right_max = WORLD_W - p_size.x * 0.5;
     if stage.boss_spawned && !stage.boss_dead {
-        right_max = right_max.min(stage.boss_x - BOSS_W * 0.5 - PLAYER_W * 0.5 - 4.0);
+        right_max = right_max.min(stage.boss_x - BOSS_W * 0.5 - p_size.x * 0.5 - 4.0);
     }
     if pos.x > right_max {
         pos.x = right_max;
@@ -59,46 +71,6 @@ pub fn contra_physics(
             player.vel.x = 0.0;
         }
     }
-    for (st, s) in &solid_q {
-        let sp = st.translation.truncate();
-        if aabb_overlap(pos, p_size, sp, s.size) {
-            let dx = pos.x - sp.x;
-            let push = (p_size.x + s.size.x) * 0.5 - dx.abs();
-            if push > 0.0 {
-                if dx > 0.0 {
-                    pos.x += push;
-                } else {
-                    pos.x -= push;
-                }
-                player.vel.x = 0.0;
-            }
-        }
-    }
-
-    pos.y += player.vel.y * dt;
-    let mut on_ground = false;
-    for (st, s) in &solid_q {
-        let sp = st.translation.truncate();
-        if aabb_overlap(pos, p_size, sp, s.size) {
-            let dy = pos.y - sp.y;
-            let push = (p_size.y + s.size.y) * 0.5 - dy.abs();
-            if push > 0.0 {
-                if dy > 0.0 {
-                    pos.y += push;
-                    if player.vel.y < 0.0 {
-                        on_ground = true;
-                        player.vel.y = 0.0;
-                    }
-                } else {
-                    pos.y -= push;
-                    if player.vel.y > 0.0 {
-                        player.vel.y = 0.0;
-                    }
-                }
-            }
-        }
-    }
-    player.on_ground = on_ground;
     if !was_on_ground && on_ground && fall_speed > 180.0 {
         player.landing_t = 0.11;
     }

@@ -85,6 +85,28 @@ impl GameKind {
         }
     }
 
+    /// 每个游戏的主色，全局唯一真源。
+    ///
+    /// 卡带墙的卡片描边、关卡背景边框、结算覆盖层描边共用它 —— 之前这三处
+    /// 各写了一套互不相同的取色，同一个游戏在不同界面是不同颜色。
+    pub(super) const fn accent(self) -> Color {
+        match self {
+            GameKind::Tank => Color::srgb(0.35, 0.78, 0.42),
+            GameKind::BombMaze => Color::srgb(0.95, 0.58, 0.24),
+            GameKind::SpaceShooter => Color::srgb(0.36, 0.72, 1.0),
+            GameKind::SuperMario => Color::srgb(0.92, 0.42, 0.30),
+            GameKind::Contra => Color::srgb(0.95, 0.36, 0.22),
+            GameKind::BubbleBobble => Color::srgb(0.90, 0.40, 0.80),
+            GameKind::MemoryMatch => Color::srgb(0.36, 0.86, 0.86),
+            GameKind::Sokoban => Color::srgb(0.96, 0.78, 0.32),
+        }
+    }
+
+    /// 卡带墙上的短名（去掉 `title()` 前面的编号）。
+    pub(super) fn short_title(self) -> &'static str {
+        let t = self.title();
+        t.split_once(' ').map(|(_, name)| name).unwrap_or(t)
+    }
 }
 
 #[derive(Resource)]
@@ -130,6 +152,12 @@ struct SaveEnvelope {
 /// 工作目录是 `/`，用相对路径写入会静默失败、存档丢失。其它平台保持运行目录下的
 /// 相对路径，开发期 `cargo run` 行为不变。
 fn save_path() -> std::path::PathBuf {
+    // 无头截图跑起来会读写存档，而 baogames.save 是入库文件——必须能重定向，
+    // 否则每截一轮图工作区就脏一次。
+    #[cfg(feature = "devtools")]
+    if let Some(path) = std::env::var_os("BAOGAMES_SAVE_PATH") {
+        return std::path::PathBuf::from(path);
+    }
     #[cfg(target_os = "macos")]
     if let Some(home) = std::env::var_os("HOME") {
         let dir = std::path::Path::new(&home).join("Library/Application Support/BaoGames");

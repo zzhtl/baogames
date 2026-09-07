@@ -4,7 +4,7 @@ use crate::common::audio::{PlaySfx, SfxKind};
 use crate::game::model::{Collider, GameKind, GameSession};
 
 use super::super::components::*;
-use super::super::constants::{PLAYER_BULLET_SPEED, POWERUP_SIZE, STAGE_TOTAL_ENEMIES};
+use super::super::constants::{PLAYER_BULLET_SPEED, POWERUP_SIZE, STAGE_TOTAL_ENEMIES, TANK_SIZE, TILE};
 use super::super::geometry::aabb_overlap;
 use super::super::resources::TankStage;
 use super::super::setup::spawn_steel_at;
@@ -25,6 +25,11 @@ pub fn tank_powerup_pickup(
     if session.kind != GameKind::Tank || session.paused || session.finished {
         return;
     }
+    // 所有坦克的位置，供铲子刷钢墙时做占位检测
+    let tank_positions: Vec<Vec2> = players
+        .iter()
+        .map(|(t, _, _, _)| t.translation.truncate())
+        .collect();
     for (pe, ptr, powerup) in &powerups {
         let pp = ptr.translation.truncate();
         // 找到吃到道具的玩家 id（先只读判定，避免与后续可变借用冲突）
@@ -49,6 +54,7 @@ pub fn tank_powerup_pickup(
             &mut players,
             &enemies,
             &bases,
+            &tank_positions,
         );
         session.score += 500 + bonus;
         sfx.write(PlaySfx(SfxKind::Powerup));
@@ -56,6 +62,7 @@ pub fn tank_powerup_pickup(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_powerup(
     kind: PowerUpKind,
     player_id: usize,
@@ -64,6 +71,7 @@ fn apply_powerup(
     players: &mut PlayerQuery,
     enemies: &Query<Entity, With<EnemyTankFC>>,
     bases: &Query<&Transform, With<BaseFC>>,
+    tank_positions: &[Vec2],
 ) -> u32 {
     match kind {
         PowerUpKind::Star => {
@@ -109,7 +117,16 @@ fn apply_powerup(
                     Vec2::new(-32.0, 32.0),
                     Vec2::new(32.0, 32.0),
                 ] {
-                    spawn_steel_at(commands, bp + off);
+                    let cell = bp + off;
+                    // 占位检测：这几格原本是砖墙，玩家把它打掉后可以站进去。
+                    // 无条件刷 32×32 钢墙会把人直接封死在里面，且没有脱困路径。
+                    if tank_positions
+                        .iter()
+                        .any(|p| aabb_overlap(*p, Vec2::splat(TANK_SIZE - 2.0), cell, Vec2::splat(TILE)))
+                    {
+                        continue;
+                    }
+                    spawn_steel_at(commands, cell);
                 }
             }
         }
