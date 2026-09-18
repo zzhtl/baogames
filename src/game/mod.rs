@@ -8,12 +8,21 @@ pub mod contra;
 #[cfg(feature = "devtools")]
 mod devtools;
 mod hud;
+pub mod linkup;
+pub mod maze;
 pub mod memory_match;
 mod menu;
 mod model;
 mod overlay;
+pub mod puzzle;
+pub mod schulte;
 pub mod sokoban;
+pub mod simon;
+pub mod sliding;
+pub mod stroop;
+pub mod sudoku;
 pub mod space_shooter;
+pub mod spotdiff;
 mod super_mario;
 pub mod tank;
 
@@ -130,6 +139,15 @@ pub fn run() {
                 .after(ActionInputSet)
                 .run_if(in_state(AppState::Playing))
                 .run_if(resource_exists::<sokoban::SokobanStage>),
+        )
+        .add_systems(
+            PreUpdate,
+            // 八款益智游戏共用一个输入缓冲：同一时刻只有一个游戏在跑，
+            // 资源由各自的 setup_stage 插入，所以只需注册这一条。
+            puzzle::puzzle_sample_input
+                .after(ActionInputSet)
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<puzzle::PuzzleControls>),
         )
         .add_systems(
             PreUpdate,
@@ -402,6 +420,134 @@ pub fn run() {
                 .run_if(resource_exists::<sokoban::SokobanStage>),
         )
         .add_systems(
+            FixedUpdate,
+            (schulte::schulte_input, schulte::schulte_check_finish)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<schulte::SchulteStage>),
+        )
+        .add_systems(
+            Update,
+            (
+                schulte::schulte_render_sync,
+                schulte::schulte_cursor_follow,
+                schulte::schulte_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<schulte::SchulteStage>),
+        )
+        .add_systems(
+            FixedUpdate,
+            (stroop::stroop_input, stroop::stroop_check_finish)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<stroop::StroopStage>),
+        )
+        .add_systems(
+            Update,
+            (stroop::stroop_render_sync, stroop::stroop_hud_update)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<stroop::StroopStage>),
+        )
+        .add_systems(
+            FixedUpdate,
+            (sudoku::sudoku_input, sudoku::sudoku_check_finish)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<sudoku::SudokuStage>),
+        )
+        .add_systems(
+            Update,
+            (
+                sudoku::sudoku_render_sync,
+                sudoku::sudoku_cursor_follow,
+                sudoku::sudoku_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<sudoku::SudokuStage>),
+        )
+        .add_systems(
+            FixedUpdate,
+            (sliding::sliding_input, sliding::sliding_check_finish)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<sliding::SlidingStage>),
+        )
+        .add_systems(
+            Update,
+            (sliding::sliding_render_sync, sliding::sliding_hud_update)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<sliding::SlidingStage>),
+        )
+        .add_systems(
+            FixedUpdate,
+            (maze::maze_input, maze::maze_check_finish)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<maze::MazeStage>),
+        )
+        .add_systems(
+            Update,
+            (maze::maze_render_sync, maze::maze_fog_sync, maze::maze_hud_update)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<maze::MazeStage>),
+        )
+        .add_systems(
+            FixedUpdate,
+            (linkup::linkup_input, linkup::linkup_check_finish)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<linkup::LinkupStage>),
+        )
+        .add_systems(
+            Update,
+            (
+                linkup::linkup_render_sync,
+                linkup::linkup_cursor_follow,
+                linkup::linkup_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<linkup::LinkupStage>),
+        )
+        .add_systems(
+            FixedUpdate,
+            (simon::simon_update, simon::simon_check_finish)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<simon::SimonStage>),
+        )
+        .add_systems(
+            Update,
+            (simon::simon_render_sync, simon::simon_hud_update)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<simon::SimonStage>),
+        )
+        .add_systems(
+            FixedUpdate,
+            (spotdiff::spotdiff_input, spotdiff::spotdiff_check_finish)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<spotdiff::SpotDiffStage>),
+        )
+        .add_systems(
+            Update,
+            (
+                spotdiff::spotdiff_render_sync,
+                spotdiff::spotdiff_cursor_follow,
+                spotdiff::spotdiff_hud_update,
+            )
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<spotdiff::SpotDiffStage>),
+        )
+        .add_systems(
             OnExit(AppState::Playing),
             (
                 cleanup::<GameEntity>,
@@ -468,6 +614,46 @@ fn paint_stage_backdrop(commands: &mut Commands, kind: GameKind, display_mode: D
             Color::srgb(0.10, 0.08, 0.06),
             Color::srgb(0.18, 0.14, 0.10),
             Color::srgb(0.96, 0.74, 0.32),
+        ),
+        GameKind::Schulte => (
+            Color::srgb(0.05, 0.11, 0.10),
+            Color::srgb(0.09, 0.18, 0.16),
+            Color::srgb(0.36, 0.86, 0.70),
+        ),
+        GameKind::Stroop => (
+            Color::srgb(0.10, 0.06, 0.11),
+            Color::srgb(0.18, 0.10, 0.19),
+            Color::srgb(0.90, 0.48, 0.82),
+        ),
+        GameKind::Sudoku => (
+            Color::srgb(0.05, 0.06, 0.12),
+            Color::srgb(0.09, 0.11, 0.20),
+            Color::srgb(0.46, 0.55, 0.95),
+        ),
+        GameKind::Sliding => (
+            Color::srgb(0.09, 0.10, 0.05),
+            Color::srgb(0.16, 0.17, 0.09),
+            Color::srgb(0.82, 0.86, 0.34),
+        ),
+        GameKind::MazeRun => (
+            Color::srgb(0.04, 0.08, 0.06),
+            Color::srgb(0.08, 0.14, 0.11),
+            Color::srgb(0.45, 0.82, 0.38),
+        ),
+        GameKind::LinkUp => (
+            Color::srgb(0.04, 0.08, 0.12),
+            Color::srgb(0.07, 0.14, 0.21),
+            Color::srgb(0.36, 0.76, 0.96),
+        ),
+        GameKind::Simon => (
+            Color::srgb(0.11, 0.05, 0.08),
+            Color::srgb(0.19, 0.09, 0.14),
+            Color::srgb(0.98, 0.42, 0.66),
+        ),
+        GameKind::SpotDiff => (
+            Color::srgb(0.11, 0.07, 0.05),
+            Color::srgb(0.19, 0.13, 0.09),
+            Color::srgb(0.99, 0.56, 0.38),
         ),
     };
 
@@ -548,6 +734,14 @@ fn setup_game(
         GameKind::BubbleBobble => MusicKind::BubbleShooter,
         GameKind::MemoryMatch => MusicKind::MemoryMatch,
         GameKind::Sokoban => MusicKind::Sokoban,
+        GameKind::Schulte => MusicKind::Schulte,
+        GameKind::Stroop => MusicKind::Stroop,
+        GameKind::Sudoku => MusicKind::Sudoku,
+        GameKind::Sliding => MusicKind::Sliding,
+        GameKind::MazeRun => MusicKind::MazeRun,
+        GameKind::LinkUp => MusicKind::LinkUp,
+        GameKind::Simon => MusicKind::Simon,
+        GameKind::SpotDiff => MusicKind::SpotDiff,
     }));
 
     // HUD 根：挂相机下，滚屏游戏的 HUD 自动跟随（见 hud.rs 模块说明）
@@ -583,6 +777,31 @@ fn setup_game(
         }
         GameKind::MemoryMatch => memory_match::setup_stage(&mut commands, &font, hud_root, level),
         GameKind::Sokoban => sokoban::setup_stage(&mut commands, &font, hud_root, level),
+        // 益智八款多收一个年龄档：决定起始网格、限时与干扰强度。
+        GameKind::Schulte => {
+            schulte::setup_stage(&mut commands, &font, hud_root, level, save.age_tier)
+        }
+        GameKind::Stroop => {
+            stroop::setup_stage(&mut commands, &font, hud_root, level, save.age_tier)
+        }
+        GameKind::Sudoku => {
+            sudoku::setup_stage(&mut commands, &font, hud_root, level, save.age_tier)
+        }
+        GameKind::Sliding => {
+            sliding::setup_stage(&mut commands, &font, hud_root, level, save.age_tier)
+        }
+        GameKind::MazeRun => {
+            maze::setup_stage(&mut commands, &font, hud_root, level, save.age_tier)
+        }
+        GameKind::LinkUp => {
+            linkup::setup_stage(&mut commands, &font, hud_root, level, save.age_tier)
+        }
+        GameKind::Simon => {
+            simon::setup_stage(&mut commands, &font, hud_root, level, save.age_tier)
+        }
+        GameKind::SpotDiff => {
+            spotdiff::setup_stage(&mut commands, &font, hud_root, level, save.age_tier)
+        }
     }
 }
 
@@ -711,6 +930,16 @@ fn cleanup_stage_resources(mut commands: Commands) {
     commands.remove_resource::<bubble_shooter::BubbleStage>();
     commands.remove_resource::<memory_match::MemoryStage>();
     commands.remove_resource::<sokoban::SokobanStage>();
+    commands.remove_resource::<schulte::SchulteStage>();
+    commands.remove_resource::<stroop::StroopStage>();
+    commands.remove_resource::<sudoku::SudokuStage>();
+    commands.remove_resource::<sliding::SlidingStage>();
+    commands.remove_resource::<maze::MazeStage>();
+    commands.remove_resource::<linkup::LinkupStage>();
+    commands.remove_resource::<simon::SimonStage>();
+    commands.remove_resource::<spotdiff::SpotDiffStage>();
+    // 益智八款共用的输入缓冲（非益智关卡时本就不存在，remove 是空操作）。
+    commands.remove_resource::<puzzle::PuzzleControls>();
 }
 
 #[cfg(test)]

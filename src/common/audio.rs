@@ -195,10 +195,15 @@ pub enum SfxKind {
     Deny,
     Win,
     Lose,
+    /// 记忆序列的四个音板，音高刻意拉开一个大三和弦，听音也能分辨。
+    Tone0,
+    Tone1,
+    Tone2,
+    Tone3,
 }
 
 impl SfxKind {
-    pub const COUNT: usize = 17;
+    pub const COUNT: usize = 21;
     pub const ALL: [SfxKind; Self::COUNT] = [
         SfxKind::MenuMove,
         SfxKind::MenuConfirm,
@@ -217,6 +222,10 @@ impl SfxKind {
         SfxKind::Deny,
         SfxKind::Win,
         SfxKind::Lose,
+        SfxKind::Tone0,
+        SfxKind::Tone1,
+        SfxKind::Tone2,
+        SfxKind::Tone3,
     ];
 
     fn index(self) -> usize {
@@ -273,6 +282,11 @@ pub fn build_sfx(kind: SfxKind) -> Vec<f32> {
             triangle_sweep(330.0, 330.0, 0.18, 0.3),
             triangle_sweep(262.0, 262.0, 0.3, 0.3),
         ]),
+        // C4 / E4 / G4 / C5：四个音板各占一个音，连起来是个大三和弦琶音。
+        SfxKind::Tone0 => triangle_sweep(262.0, 262.0, 0.22, 0.30),
+        SfxKind::Tone1 => triangle_sweep(330.0, 330.0, 0.22, 0.30),
+        SfxKind::Tone2 => triangle_sweep(392.0, 392.0, 0.22, 0.30),
+        SfxKind::Tone3 => triangle_sweep(523.0, 523.0, 0.22, 0.30),
     }
 }
 
@@ -289,10 +303,18 @@ pub enum MusicKind {
     BubbleShooter,
     MemoryMatch,
     Sokoban,
+    Schulte,
+    Stroop,
+    Sudoku,
+    Sliding,
+    MazeRun,
+    LinkUp,
+    Simon,
+    SpotDiff,
 }
 
 impl MusicKind {
-    pub const COUNT: usize = 9;
+    pub const COUNT: usize = 17;
     pub const ALL: [Self; Self::COUNT] = [
         Self::Menu,
         Self::Tank,
@@ -303,6 +325,14 @@ impl MusicKind {
         Self::BubbleShooter,
         Self::MemoryMatch,
         Self::Sokoban,
+        Self::Schulte,
+        Self::Stroop,
+        Self::Sudoku,
+        Self::Sliding,
+        Self::MazeRun,
+        Self::LinkUp,
+        Self::Simon,
+        Self::SpotDiff,
     ];
 
     fn index(self) -> usize {
@@ -355,7 +385,7 @@ fn sequence(pattern: &[i8], step_seconds: f32, duty: f32, gain: f32, triangle: b
     samples
 }
 
-/// 九首短循环均为本项目原创动机，只借用早期主机的方波/三角波音色。
+/// 全部短循环均为本项目原创动机，只借用早期主机的方波/三角波音色。
 pub fn build_music(kind: MusicKind) -> Vec<f32> {
     let (bpm, lead, bass): (f32, &[i8], &[i8]) = match kind {
         MusicKind::Menu => (132.0, &[72, 76, 79, 84, 79, 76, 74, 79, 77, 81, 84, 81, 79, 74, 76, -1], &[48, 48, 55, 55, 53, 53, 55, 55, 50, 50, 57, 57, 55, 55, 43, 43]),
@@ -367,6 +397,15 @@ pub fn build_music(kind: MusicKind) -> Vec<f32> {
         MusicKind::BubbleShooter => (136.0, &[77, 81, 84, 82, 79, 82, 86, 84, 81, 84, 89, 86, 84, 82, 79, 81], &[53, 60, 57, 60, 55, 62, 58, 62, 53, 60, 57, 60, 55, 62, 53, 53]),
         MusicKind::MemoryMatch => (104.0, &[72, -1, 76, 79, 74, -1, 77, 81, 76, -1, 79, 83, 74, 77, 76, -1], &[48, 48, 52, 52, 50, 50, 53, 53, 48, 48, 55, 55, 50, 50, 43, 43]),
         MusicKind::Sokoban => (112.0, &[60, 63, 67, -1, 62, 65, 69, -1, 63, 67, 70, 67, 62, 65, 60, -1], &[36, 43, 39, 43, 38, 45, 41, 45, 39, 46, 43, 46, 38, 45, 36, 36]),
+        // 益智八款整体走轻快但不催促的路子，避免限时玩法叠上紧张的配乐。
+        MusicKind::Schulte => (126.0, &[74, 79, 76, 81, 78, 83, 81, 86, 83, 79, 76, 81, 78, 74, 72, -1], &[50, 50, 57, 57, 54, 54, 59, 59, 52, 52, 59, 59, 55, 55, 48, 48]),
+        MusicKind::Stroop => (142.0, &[76, 76, 80, 83, 81, 81, 85, 88, 83, 80, 76, 80, 78, 75, 73, -1], &[52, 59, 56, 59, 57, 64, 61, 64, 55, 62, 59, 62, 50, 57, 54, 57]),
+        MusicKind::Sudoku => (96.0, &[69, -1, 72, 76, 74, -1, 71, 74, 72, -1, 76, 79, 74, 71, 69, -1], &[45, 45, 52, 52, 50, 50, 57, 57, 48, 48, 55, 55, 43, 43, 50, 50]),
+        MusicKind::SpotDiff => (114.0, &[77, 81, 79, 84, 82, 86, 84, 89, 84, 81, 79, 82, 77, 74, 72, -1], &[53, 60, 57, 60, 58, 65, 62, 65, 55, 62, 59, 62, 53, 60, 57, 60]),
+        MusicKind::Simon => (100.0, &[72, -1, 76, -1, 79, -1, 84, -1, 79, -1, 76, -1, 74, 77, 72, -1], &[48, 48, 52, 52, 55, 55, 60, 60, 55, 55, 52, 52, 50, 50, 43, 43]),
+        MusicKind::LinkUp => (132.0, &[79, 83, 86, 83, 81, 84, 88, 84, 83, 86, 90, 86, 84, 81, 79, -1], &[55, 62, 59, 62, 57, 64, 60, 64, 55, 62, 59, 62, 53, 60, 57, 60]),
+        MusicKind::MazeRun => (108.0, &[62, 65, 69, 65, 67, 70, 74, 70, 65, 69, 72, 69, 67, 64, 62, -1], &[38, 45, 42, 45, 43, 50, 47, 50, 41, 48, 45, 48, 36, 43, 40, 43]),
+        MusicKind::Sliding => (118.0, &[71, 74, 78, 74, 73, 76, 80, 76, 74, 78, 81, 78, 76, 73, 71, -1], &[47, 54, 51, 54, 49, 56, 52, 56, 47, 54, 51, 54, 45, 52, 49, 52]),
     };
     let step_seconds = 30.0 / bpm;
     let melody = sequence(lead, step_seconds, 0.25, 0.13, false);

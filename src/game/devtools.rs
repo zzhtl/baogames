@@ -132,6 +132,14 @@ fn script_for(scene: &str) -> Option<Script> {
         "game_bubble" => game_scene(GameKind::BubbleBobble, "game_bubble"),
         "game_memory" => game_scene(GameKind::MemoryMatch, "game_memory"),
         "game_sokoban" => game_scene(GameKind::Sokoban, "game_sokoban"),
+        "game_schulte" => game_scene(GameKind::Schulte, "game_schulte"),
+        "game_stroop" => game_scene(GameKind::Stroop, "game_stroop"),
+        "game_sudoku" => game_scene(GameKind::Sudoku, "game_sudoku"),
+        "game_sliding" => game_scene(GameKind::Sliding, "game_sliding"),
+        "game_maze" => game_scene(GameKind::MazeRun, "game_maze"),
+        "game_linkup" => game_scene(GameKind::LinkUp, "game_linkup"),
+        "game_simon" => game_scene(GameKind::Simon, "game_simon"),
+        "game_spotdiff" => game_scene(GameKind::SpotDiff, "game_spotdiff"),
         "paused" => Script::default()
             .goto_menu()
             .enter(GameKind::Tank, 1)
@@ -170,7 +178,7 @@ fn script_for(scene: &str) -> Option<Script> {
     Some(s)
 }
 
-const ALL_SCENES: [&str; 16] = [
+const ALL_SCENES: [&str; 24] = [
     "menu_library",
     "menu_stage",
     "menu_settings",
@@ -183,6 +191,14 @@ const ALL_SCENES: [&str; 16] = [
     "game_bubble",
     "game_memory",
     "game_sokoban",
+    "game_schulte",
+    "game_stroop",
+    "game_sudoku",
+    "game_sliding",
+    "game_maze",
+    "game_linkup",
+    "game_simon",
+    "game_spotdiff",
     "paused",
     "result_win",
     "result_lose",

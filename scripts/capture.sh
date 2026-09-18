@@ -2,7 +2,7 @@
 # 无头截图。开发机没有显示器（XDG_SESSION_TYPE=tty），所以用 Xvfb 提供 X server、
 # lavapipe 提供软件 Vulkan，把游戏真的跑起来再抓画面。
 #
-#   ./scripts/capture.sh            # 全部 16 个场景（单进程跑完）
+#   ./scripts/capture.sh            # 全部 24 个场景（单进程跑完）
 #   ./scripts/capture.sh menu_library
 #
 # 产物写 preview_out/capture/，.gitignore 已忽略 preview_out。

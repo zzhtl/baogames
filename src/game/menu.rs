@@ -2,7 +2,7 @@ use bevy::input::gamepad::Gamepad;
 use bevy::prelude::*;
 
 use crate::common::audio::{AudioMix, MusicKind, PlayMusic, PlaySfx, SfxKind};
-use crate::common::constants::{ARENA_H, ARENA_W, FONT_BODY, FONT_TITLE};
+use crate::common::constants::{ARENA_H, ARENA_W, FONT_BODY, FONT_TITLE, Z_SPRITE};
 use crate::common::px::px;
 use crate::common::theme::{
     ACCENT, BG_DEEP, BORDER_DIM, SURFACE, SURFACE_SEL, TEXT_DIM, TEXT_MUTED, TEXT_PRIMARY,
@@ -15,7 +15,7 @@ use crate::common::settings::{
     InputAction, InputBindings, KeyboardKey, PadButton, PlayerSlot,
 };
 
-use super::model::{AppState, GameKind, MenuEntity, SaveData, SelectedGame};
+use super::model::{AppState, GameCategory, GameKind, MenuEntity, SaveData, SelectedGame};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum MenuPage {
@@ -27,6 +27,8 @@ enum MenuPage {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum LibraryFocus {
+    /// 顶部的「经典 | 益智」分类页签。
+    Tabs,
     #[default]
     Games,
     Stage,
@@ -41,7 +43,10 @@ enum CaptureDevice {
 #[derive(Resource, Debug)]
 pub(super) struct MenuUiState {
     page: MenuPage,
+    category: GameCategory,
     library_focus: LibraryFocus,
+    /// 选关面板里的行游标：0 = 关卡，1 = 年龄档（仅益智栏有第 1 行）。
+    stage_row: usize,
     settings_cursor: usize,
     control_player: PlayerSlot,
     control_cursor: usize,
@@ -53,7 +58,9 @@ impl Default for MenuUiState {
     fn default() -> Self {
         Self {
             page: MenuPage::Library,
+            category: GameCategory::Classic,
             library_focus: LibraryFocus::Games,
+            stage_row: 0,
             settings_cursor: 0,
             control_player: PlayerSlot::One,
             control_cursor: 0,
@@ -71,6 +78,13 @@ const CARD_COL_X: f32 = px(58.0);
 const CARD_ROW_TOP: f32 = px(49.0);
 const CARD_ROW_STEP: f32 = px(28.0);
 const PANEL_W: f32 = px(230.0);
+/// 分类页签占的正是原来标题那一行，纵向预算不变。
+const TAB_Y: f32 = px(78.0);
+const TAB_X: f32 = px(36.0);
+const TAB_RULE_Y: f32 = px(65.0);
+/// 益智栏的选关面板把「关卡」和「年龄档」并排放在同一行，面板高度不用动。
+const STAGE_COL_X: f32 = px(56.0);
+const STAGE_ROW_Y: f32 = px(-71.0);
 
 fn spawn_backdrop(commands: &mut Commands) {
     background_rect(
@@ -148,6 +162,70 @@ fn spawn_cover_icon(commands: &mut Commands, kind: GameKind, center: Vec2, accen
             (0.0, 0.0, 9.0, 9.0, accent),
             (0.0, 0.0, 3.0, 3.0, Color::srgb(1.0, 0.93, 0.62)),
         ],
+        // 3×3 方格中挑两格点亮，示意「按顺序点格子」
+        GameKind::Schulte => &[
+            (0.0, 0.0, 13.0, 13.0, Color::srgb(0.13, 0.20, 0.19)),
+            (-4.0, 4.0, 3.0, 3.0, accent),
+            (0.0, 0.0, 3.0, 3.0, accent),
+            (4.0, -4.0, 3.0, 3.0, light),
+        ],
+        // 一个"字"压在三色条上，示意字义与墨色打架
+        GameKind::Stroop => &[
+            (0.0, 4.0, 13.0, 5.0, Color::srgb(0.98, 0.29, 0.29)),
+            (0.0, -2.0, 13.0, 5.0, Color::srgb(0.31, 0.60, 1.00)),
+            (0.0, -8.0, 13.0, 5.0, accent),
+            (0.0, 0.0, 3.0, 11.0, dark),
+        ],
+        // 九宫格：一条竖宫线 + 一条横宫线
+        GameKind::Sudoku => &[
+            (0.0, 0.0, 13.0, 13.0, Color::srgb(0.11, 0.13, 0.22)),
+            (-2.0, 0.0, 1.0, 13.0, accent),
+            (2.0, 0.0, 1.0, 13.0, accent),
+            (0.0, 0.0, 13.0, 1.0, accent),
+            (-4.0, 4.0, 3.0, 3.0, light),
+        ],
+        // 3×3 滑块少一块，右下角空着
+        GameKind::Sliding => &[
+            (0.0, 0.0, 13.0, 13.0, dark),
+            (-4.0, 4.0, 3.0, 3.0, accent),
+            (0.0, 4.0, 3.0, 3.0, accent),
+            (4.0, 4.0, 3.0, 3.0, accent),
+            (-4.0, 0.0, 3.0, 3.0, accent),
+            (0.0, 0.0, 3.0, 3.0, accent),
+            (4.0, 0.0, 3.0, 3.0, accent),
+            (-4.0, -4.0, 3.0, 3.0, accent),
+            (0.0, -4.0, 3.0, 3.0, light),
+        ],
+        // 一条折返的通道 + 右下角的出口
+        GameKind::MazeRun => &[
+            (0.0, 0.0, 13.0, 13.0, Color::srgb(0.16, 0.27, 0.20)),
+            (-3.0, 3.0, 7.0, 2.0, dark),
+            (3.0, 0.0, 2.0, 8.0, dark),
+            (-1.0, -3.0, 9.0, 2.0, dark),
+            (4.0, -4.0, 3.0, 3.0, accent),
+        ],
+        // 两张同图案的牌，中间一条折线连起来
+        GameKind::LinkUp => &[
+            (-4.0, 4.0, 5.0, 5.0, accent),
+            (4.0, -4.0, 5.0, 5.0, accent),
+            (-4.0, -1.0, 1.0, 5.0, light),
+            (0.0, -4.0, 9.0, 1.0, light),
+        ],
+        // 十字排列的四个音板，上面那个亮着
+        GameKind::Simon => &[
+            (0.0, 5.0, 6.0, 5.0, accent),
+            (0.0, -5.0, 6.0, 5.0, Color::srgb(0.11, 0.24, 0.48)),
+            (-5.0, 0.0, 5.0, 6.0, Color::srgb(0.44, 0.12, 0.14)),
+            (5.0, 0.0, 5.0, 6.0, Color::srgb(0.45, 0.36, 0.07)),
+        ],
+        // 左右两张小图，右边那张少一块
+        GameKind::SpotDiff => &[
+            (-4.0, 0.0, 8.0, 12.0, Color::srgb(0.13, 0.15, 0.20)),
+            (4.0, 0.0, 8.0, 12.0, Color::srgb(0.13, 0.15, 0.20)),
+            (-4.0, 3.0, 4.0, 4.0, accent),
+            (-4.0, -3.0, 4.0, 4.0, light),
+            (4.0, 3.0, 4.0, 4.0, accent),
+        ],
     };
     rect(commands, center, Vec2::splat(px(18.0)), Color::srgb(0.031, 0.039, 0.055), MenuEntity);
     for (dx, dy, w, h, color) in parts.iter().copied() {
@@ -161,6 +239,29 @@ fn spawn_cover_icon(commands: &mut Commands, kind: GameKind, center: Vec2, accen
     }
 }
 
+/// 在 2 列 × N 行的卡带网格里走一步。
+///
+/// 全程 clamp，返回值恒在 `0..count` —— 分栏之后下标基准从「全局 0..15」变成
+/// 「栏内 0..8」，越界不再是显示错乱而是直接 panic，所以这里不留任何出口。
+fn step_slot(slot: usize, dx: isize, dy: isize, count: usize) -> usize {
+    if count == 0 {
+        return 0;
+    }
+    let rows = count.div_ceil(2) as isize;
+    let col = ((slot % 2) as isize + dx).clamp(0, 1);
+    let row = ((slot / 2) as isize + dy).clamp(0, rows - 1);
+    ((row * 2 + col) as usize).min(count - 1)
+}
+
+/// 聚焦的那一项才画 `◀ ▶`：同一行并排两个可调项时，两组箭头会让人分不清在调哪个。
+fn arrowed(value: &str, focused: bool) -> String {
+    if focused {
+        format!("◀ {value} ▶")
+    } else {
+        value.to_string()
+    }
+}
+
 fn build_library(
     commands: &mut Commands,
     font: &UiFont,
@@ -168,11 +269,32 @@ fn build_library(
     selected: GameKind,
     ui: &MenuUiState,
 ) {
-    text(commands, font, "经典卡带墙", Vec2::new(0.0, px(78.0)), FONT_TITLE, ACCENT, MenuEntity);
-    rect(commands, Vec2::new(0.0, px(65.0)), Vec2::new(PANEL_W, px(1.0)), BORDER_DIM, MenuEntity);
+    for category in GameCategory::ALL {
+        let on = category == ui.category;
+        let focused = on && ui.library_focus == LibraryFocus::Tabs;
+        let x = if category == GameCategory::Classic { -TAB_X } else { TAB_X };
+        let color = if focused {
+            ACCENT
+        } else if on {
+            TEXT_PRIMARY
+        } else {
+            TEXT_DIM
+        };
+        text(commands, font, category.label(), Vec2::new(x, TAB_Y), FONT_TITLE, color, MenuEntity);
+    }
+    rect(commands, Vec2::new(0.0, TAB_RULE_Y), Vec2::new(PANEL_W, px(1.0)), BORDER_DIM, MenuEntity);
+    // 选中页签的下划线压在整条分隔线之上。两者同为 1 像素高、位置重合，
+    // 必须显式抬 z —— 同 z 的精灵谁在上取决于 spawn 顺序，不该靠这个。
+    let underline_x = if ui.category == GameCategory::Classic { -TAB_X } else { TAB_X };
+    commands.spawn((
+        Sprite::from_color(ACCENT, Vec2::new(px(52.0), px(1.0))),
+        Transform::from_translation(Vec3::new(underline_x, TAB_RULE_Y, Z_SPRITE + 0.1)),
+        MenuEntity,
+    ));
 
-    for (index, kind) in GameKind::ALL.iter().copied().enumerate() {
-        let center = card_center(index);
+    let games = ui.category.games();
+    for (slot, kind) in games.iter().copied().enumerate() {
+        let center = card_center(slot);
         let accent = kind.accent();
         let focused = kind == selected && ui.library_focus == LibraryFocus::Games;
         panel(
@@ -208,6 +330,7 @@ fn build_library(
     let index = selected.index();
     let level = save.selected_levels[index].clamp(1, save.unlocked_levels[index]);
     let stage_focused = ui.library_focus == LibraryFocus::Stage;
+    let puzzle = ui.category == GameCategory::Puzzle;
     panel(
         commands,
         Vec2::new(0.0, px(-71.0)),
@@ -217,15 +340,32 @@ fn build_library(
         MenuEntity,
     );
     text(commands, font, selected.goal_text(), Vec2::new(0.0, px(-58.0)), FONT_BODY, TEXT_MUTED, MenuEntity);
-    text(
-        commands, font, &format!("◀  第 {level} 关  ▶"),
-        Vec2::new(0.0, px(-71.0)), FONT_BODY,
-        if stage_focused { ACCENT } else { TEXT_PRIMARY }, MenuEntity,
-    );
-    let hint = if stage_focused {
-        "左右选关 · 开始键游玩"
+    if puzzle {
+        // 关卡与年龄档并排：面板只有 38 画布像素高，塞不下第四行。
+        let level_on = stage_focused && ui.stage_row == 0;
+        let age_on = stage_focused && ui.stage_row == 1;
+        text(
+            commands, font, &arrowed(&format!("第{level}关"), level_on),
+            Vec2::new(-STAGE_COL_X, STAGE_ROW_Y), FONT_BODY,
+            if level_on { ACCENT } else { TEXT_PRIMARY }, MenuEntity,
+        );
+        text(
+            commands, font, &arrowed(save.age_tier.label(), age_on),
+            Vec2::new(STAGE_COL_X, STAGE_ROW_Y), FONT_BODY,
+            if age_on { ACCENT } else { TEXT_PRIMARY }, MenuEntity,
+        );
     } else {
-        "动作一选关 · 动作二设置"
+        text(
+            commands, font, &format!("◀  第 {level} 关  ▶"),
+            Vec2::new(0.0, STAGE_ROW_Y), FONT_BODY,
+            if stage_focused { ACCENT } else { TEXT_PRIMARY }, MenuEntity,
+        );
+    }
+    let hint = match (ui.library_focus, puzzle) {
+        (LibraryFocus::Tabs, _) => "左右换分类 · 下键选卡带",
+        (LibraryFocus::Stage, true) => "左右调整 · 上下换行 · 开始键玩",
+        (LibraryFocus::Stage, false) => "左右选关 · 开始键游玩",
+        (LibraryFocus::Games, _) => "动作一选关 · 动作二设置",
     };
     text(commands, font, hint, Vec2::new(0.0, px(-84.0)), FONT_BODY, TEXT_DIM, MenuEntity);
 }
@@ -333,7 +473,9 @@ pub(super) fn setup_menu(
     mut music: MessageWriter<PlayMusic>,
 ) {
     ui.page = MenuPage::Library;
+    ui.category = selected.0.category();
     ui.library_focus = LibraryFocus::Games;
+    ui.stage_row = 0;
     ui.capture = None;
     music.write(PlayMusic(MusicKind::Menu));
     build_menu(&mut commands, &font, &save, selected.0, &ui);
@@ -459,20 +601,53 @@ pub(super) fn menu_input(
 
     match ui.page {
         MenuPage::Library => match ui.library_focus {
+            LibraryFocus::Tabs => {
+                if left || right {
+                    let games = ui.category.games();
+                    let slot = games.iter().position(|kind| *kind == selected.0).unwrap_or(0);
+                    let target = ui.category.toggled();
+                    // 空栏不切：否则会停在一面没有卡带、选中项还属于另一栏的墙上。
+                    if let Some(&kind) = target.games().get(slot).or_else(|| target.games().first()) {
+                        ui.category = target;
+                        selected.0 = kind;
+                        changed = true;
+                        sfx.write(PlaySfx(SfxKind::MenuMove));
+                    }
+                }
+                if down || primary {
+                    ui.library_focus = LibraryFocus::Games;
+                    changed = true;
+                } else if secondary {
+                    ui.page = MenuPage::Settings;
+                    changed = true;
+                    sfx.write(PlaySfx(SfxKind::MenuConfirm));
+                } else if start {
+                    sfx.write(PlaySfx(SfxKind::MenuConfirm));
+                    launch_selected(selected.0, &mut save, &mut next_state);
+                    return;
+                }
+            }
             LibraryFocus::Games => {
-                let index = selected.0.index();
-                let mut next = index;
-                if left && !index.is_multiple_of(2) { next = index - 1; }
-                if right && index.is_multiple_of(2) { next = index + 1; }
-                if up && index >= 2 { next = index - 2; }
-                if down && index + 2 < GameKind::ALL.len() { next = index + 2; }
-                if next != index {
-                    selected.0 = GameKind::ALL[next];
+                let games = ui.category.games();
+                let slot = games.iter().position(|kind| *kind == selected.0).unwrap_or(0);
+                let next = step_slot(
+                    slot,
+                    right as isize - left as isize,
+                    down as isize - up as isize,
+                    games.len(),
+                );
+                if next != slot {
+                    selected.0 = games[next];
+                    changed = true;
+                    sfx.write(PlaySfx(SfxKind::MenuMove));
+                } else if up && slot < 2 {
+                    ui.library_focus = LibraryFocus::Tabs;
                     changed = true;
                     sfx.write(PlaySfx(SfxKind::MenuMove));
                 }
                 if primary {
                     ui.library_focus = LibraryFocus::Stage;
+                    ui.stage_row = 0;
                     changed = true;
                     sfx.write(PlaySfx(SfxKind::MenuConfirm));
                 } else if secondary {
@@ -487,22 +662,49 @@ pub(super) fn menu_input(
             }
             LibraryFocus::Stage => {
                 let index = selected.0.index();
-                let unlocked = save.unlocked_levels[index].min(selected.0.max_level());
-                let mut level = save.selected_levels[index].clamp(1, unlocked);
-                if left { level = level.saturating_sub(1).max(1); }
-                if right { level = (level + 1).min(unlocked); }
-                if level != save.selected_levels[index] {
-                    save.selected_levels[index] = level;
-                    save.store();
+                let puzzle = ui.category == GameCategory::Puzzle;
+                // 益智栏第 1 行是年龄档；经典栏只有关卡一行，上下直接退回卡带网格。
+                if up && (!puzzle || ui.stage_row == 0) {
+                    ui.library_focus = LibraryFocus::Games;
                     changed = true;
-                    sfx.write(PlaySfx(SfxKind::MenuMove));
+                } else if puzzle && (up || down) {
+                    let row = usize::from(down);
+                    if row != ui.stage_row {
+                        ui.stage_row = row;
+                        changed = true;
+                        sfx.write(PlaySfx(SfxKind::MenuMove));
+                    }
+                } else if down {
+                    ui.library_focus = LibraryFocus::Games;
+                    changed = true;
                 }
+
+                if puzzle && ui.stage_row == 1 {
+                    if left || right {
+                        save.age_tier = save.age_tier.toggled();
+                        save.store();
+                        changed = true;
+                        sfx.write(PlaySfx(SfxKind::MenuConfirm));
+                    }
+                } else {
+                    let unlocked = save.unlocked_levels[index].min(selected.0.max_level());
+                    let mut level = save.selected_levels[index].clamp(1, unlocked);
+                    if left { level = level.saturating_sub(1).max(1); }
+                    if right { level = (level + 1).min(unlocked); }
+                    if level != save.selected_levels[index] {
+                        save.selected_levels[index] = level;
+                        save.store();
+                        changed = true;
+                        sfx.write(PlaySfx(SfxKind::MenuMove));
+                    }
+                }
+
                 if primary || start {
                     sfx.write(PlaySfx(SfxKind::MenuConfirm));
                     launch_selected(selected.0, &mut save, &mut next_state);
                     return;
                 }
-                if secondary || back || up || down {
+                if secondary || back {
                     ui.library_focus = LibraryFocus::Games;
                     changed = true;
                 }
@@ -610,12 +812,62 @@ pub(super) fn menu_input(
 mod tests {
     use super::*;
 
+    /// 每栏最多 8 张卡，2 列 4 行；卡片最低沿必须高过选关面板顶沿。
+    const CARDS_PER_TAB: usize = 8;
+
     #[test]
     fn card_grid_fits_classic_width() {
-        for index in 0..GameKind::ALL.len() {
+        for index in 0..CARDS_PER_TAB {
             let center = card_center(index);
-            assert!(center.x.abs() + 160.0 <= 360.0);
+            assert!(center.x.abs() + CARD_W * 0.5 <= px(120.0));
         }
+    }
+
+    #[test]
+    fn library_layout_has_no_vertical_overlap() {
+        let card_top = CARD_ROW_TOP + CARD_H * 0.5;
+        let last_row = (CARDS_PER_TAB.div_ceil(2) - 1) as f32;
+        let card_bottom = CARD_ROW_TOP - last_row * CARD_ROW_STEP - CARD_H * 0.5;
+        let panel_top = px(-71.0) + px(38.0) * 0.5;
+        let panel_bottom = px(-71.0) - px(38.0) * 0.5;
+        assert!(card_bottom >= panel_top + px(2.0), "卡片压到了选关面板");
+        assert!(card_top <= TAB_RULE_Y - px(1.0), "卡片顶穿了分类分隔线");
+        assert!(CARD_ROW_STEP >= CARD_H + px(1.0), "卡片行之间重叠");
+        assert!(TAB_Y + FONT_TITLE * 0.5 <= px(90.0), "分类页签超出画布上沿");
+        assert!(panel_bottom >= px(-90.0), "选关面板超出画布下沿");
+        // 益智栏的关卡 / 年龄两列并排，不能顶出面板
+        assert!(STAGE_COL_X + px(46.0) <= PANEL_W * 0.5, "选关面板两列太宽");
+    }
+
+    #[test]
+    fn every_tab_holds_at_most_two_columns_of_cards() {
+        for category in GameCategory::ALL {
+            assert!(
+                category.games().len() <= CARDS_PER_TAB,
+                "{} 栏超过 {CARDS_PER_TAB} 款，卡带墙放不下",
+                category.label()
+            );
+        }
+    }
+
+    #[test]
+    fn slot_navigation_never_escapes_the_tab() {
+        for count in 1..=CARDS_PER_TAB {
+            for slot in 0..count {
+                for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+                    assert!(
+                        step_slot(slot, dx, dy, count) < count,
+                        "count={count} slot={slot} dir=({dx},{dy}) 越界"
+                    );
+                }
+            }
+        }
+        assert_eq!(step_slot(0, 0, 0, 0), 0);
+        // 2 列网格：左上角按右到 1，按下到 2
+        assert_eq!(step_slot(0, 1, 0, 8), 1);
+        assert_eq!(step_slot(0, 0, 1, 8), 2);
+        // 奇数张卡时最后一行只有左列，按右必须停在原地而不是越界
+        assert_eq!(step_slot(6, 1, 0, 7), 6);
     }
 
     #[test]
