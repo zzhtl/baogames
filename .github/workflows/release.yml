@@ -145,8 +145,15 @@ jobs:
           files=(*)
           sha256sum "${files[@]}" > SHA256SUMS
           ls -lh
+          # v0.2.0-rc.1 这类预发布 tag 标成 prerelease，否则会顶掉 releases/latest，
+          # 而 README 的下载入口就指向 releases/latest。
+          extra=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            extra+=(--prerelease)
+          fi
           gh release create "$GITHUB_REF_NAME" ./* \
             --repo "$GITHUB_REPOSITORY" \
             --title "BaoGames $GITHUB_REF_NAME" \
             --generate-notes \
-            --verify-tag
+            --verify-tag \
+            "${extra[@]}"
