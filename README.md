@@ -2,6 +2,22 @@
 
 Rust + Bevy 编写的 16 合 1 桌面小游戏合集：8 款经典街机 / 红白机玩法，外加 8 款面向 5-12 岁的益智与专注力小游戏。项目使用原创程序化像素精灵与芯片音乐，在不复制原作素材的前提下重现经典玩法与手感。
 
+## 下载
+
+免编译的发版包在 **[Releases](https://github.com/zzhtl/baogames/releases/latest)**，由 GitHub Actions 三平台并行构建：
+
+| 平台 | 文件 | 说明 |
+| --- | --- | --- |
+| Linux x86_64 | `baogames-<版本>-linux-x86_64.tar.gz` | 解压后运行 `./baogames` |
+| Windows x86_64 | `baogames-<版本>-windows-x86_64.zip` | 解压后运行 `baogames.exe` |
+| macOS Apple 芯片 | `baogames-<版本>-macos-arm64.dmg`（或 `.zip`） | 仅 arm64（M 系列），不出 Intel / universal 包 |
+
+字体已 `include_bytes!` 内嵌进二进制，包里不带 `assets/`，解压即可运行。每个 Release 另附 `SHA256SUMS`，校验用 `sha256sum -c SHA256SUMS`（macOS 用 `shasum -a 256 -c SHA256SUMS`）。
+
+- **Linux**：依赖发行版自带的 ALSA、udev、Wayland/X11 运行库（`libasound2`、`libudev`、`libwayland-client`、`libxkbcommon`），桌面环境一般都有。二进制在 GitHub `ubuntu-latest` runner 上构建，glibc 过旧的发行版跑不起来，这种情况请从源码编译。
+- **macOS**：只做了 ad-hoc 签名、未公证，首次打开被 Gatekeeper 拦截时右键 →「打开」，或执行 `xattr -dr com.apple.quarantine BaoGames.app`。
+- **Windows**：未签名，SmartScreen 提示时选「更多信息」→「仍要运行」。
+
 ## 当前进度
 
 - 卡带墙分「经典 | 益智」两栏，每栏 2×4 共 8 款，16 款全部可玩。
@@ -12,7 +28,7 @@ Rust + Bevy 编写的 16 合 1 桌面小游戏合集：8 款经典街机 / 红�
 - 支持经典 / 辅助两种玩法。超级玛丽与魂斗罗辅助模式提供 6 个固定帧的跳跃缓冲、5 帧土狼时间；超级玛丽另有落地检查点。
 - 最高分、已解锁关卡、自由选关位置、年龄档、画面/音频/按键设置写入版本化存档；旧版存档会自动迁移。
 
-## 运行
+## 从源码运行
 
 ```bash
 cargo run
@@ -23,6 +39,17 @@ cargo run
 ```bash
 cargo test
 ```
+
+## 发版
+
+```bash
+bash scripts/release.sh v0.2.0             # 对齐 Cargo.toml 版本号 → 打 tag → 推送
+bash scripts/release.sh v0.2.0 --dry-run   # 只打印计划，不改仓库
+```
+
+推送 `v*` tag 后 `.github/workflows/release.yml` 并行构建 Linux / Windows / macOS(arm64) 三份产物，汇总 `SHA256SUMS` 并创建 GitHub Release；`v0.2.0-rc.1` 这类带后缀的 tag 会标成 prerelease，不顶掉 `releases/latest`。手动 `workflow_dispatch` 只产出 artifacts，不建 Release。
+
+macOS 也可本地打包：`bash scripts/build-macos.sh --target aarch64-apple-darwin --dmg`（需在 macOS 上执行）。
 
 ## 游戏列表
 
@@ -69,7 +96,7 @@ cargo test
 
 ## 存档
 
-通关会更新对应游戏的最高分并解锁下一关。超级玛丽共 4 关，其余游戏最高 10 关；卡带墙可在已解锁范围内自由选关。删除 `baogames.save` 可重置进度。
+通关会更新对应游戏的最高分并解锁下一关。超级玛丽共 4 关，其余游戏最高 10 关；卡带墙可在已解锁范围内自由选关。存档文件 `baogames.save` 在 Linux / Windows 上写在程序的运行目录，macOS 上写在 `~/Library/Application Support/BaoGames/`（从 Finder 启动 `.app` 时工作目录是 `/`，只能用绝对路径）；删除它可重置进度。
 
 存档为版本化格式（当前 v3，16 个进度槽位 + 年龄档）。v2（8 槽）和 1.x 的旧存档会自动迁移到前 8 个槽位，益智八款从第 1 关开始。年龄档是全局设置，不分游戏；最高分和解锁进度也不分年龄档 —— 换档后原来的纪录仍在，只是不同档之间的分数不具可比性。
 
