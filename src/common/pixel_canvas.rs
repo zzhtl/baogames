@@ -1,8 +1,7 @@
-//! 低分辨率像素画布。
+//! 保持像素游戏布局、按窗口实际像素渲染的画布。
 //!
-//! 游戏世界先渲染到 240×180（4:3）或 320×180（16:9）的纹理，再由外层
-//! 相机按整数倍最近邻放大到窗口。逻辑世界始终保持 540 单位高，画布上的一个
-//! 像素对应三个世界单位。
+//! 240×180 / 320×180 只用于布局与整数倍适配。纹理分辨率匹配窗口上的实际
+//! 显示区域（含 DPI），文字与小图形不再经过低分辨率降采样。逻辑世界仍高 540。
 
 use bevy::camera::{ImageRenderTarget, RenderTarget};
 use bevy::camera::visibility::RenderLayers;
@@ -12,7 +11,7 @@ use bevy::render::render_resource::{
 };
 
 use super::constants::ARENA_H;
-use super::px::{WORLD_PER_PX, snap};
+use super::px::snap;
 use super::audio::{PlaySfx, SfxKind};
 use super::settings::DisplayMode;
 
@@ -57,8 +56,22 @@ struct ScreenShake {
 #[derive(Resource)]
 struct CanvasImage(Handle<Image>);
 
-fn create_canvas(mode: DisplayMode) -> Image {
+fn render_size(mode: DisplayMode, logical_size: Vec2, dpi: f32) -> (u32, u32) {
     let (width, height) = mode.canvas_size();
+    let scale = (logical_size.x / width as f32).min(logical_size.y / height as f32).floor().max(1.0) * dpi;
+    ((width as f32 * scale).round() as u32, (height as f32 * scale).round() as u32)
+}
+
+/// 窗口坐标转静止关卡坐标；黑边区域不参与点击。
+pub fn cursor_world(window: &Window, config: &PixelCanvasConfig, cursor: Vec2) -> Option<Vec2> {
+    let (w, h) = config.display_mode.canvas_size();
+    let scale = (window.width() / w as f32).min(window.height() / h as f32).floor().max(1.0);
+    let pos = (cursor - Vec2::new(window.width(), window.height()) * 0.5)
+        * Vec2::new(1.0, -1.0) * (super::px::WORLD_PER_PX / scale);
+    (pos.x.abs() <= config.display_mode.world_width() * 0.5 && pos.y.abs() <= ARENA_H * 0.5).then_some(pos)
+}
+
+fn create_canvas((width, height): (u32, u32)) -> Image {
     let size = Extent3d {
         width,
         height,
@@ -87,8 +100,10 @@ fn setup_pixel_canvas(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     config: Res<PixelCanvasConfig>,
+    window: Single<&Window>,
 ) {
-    let image_handle = images.add(create_canvas(config.display_mode));
+    let size = render_size(config.display_mode, Vec2::new(window.width(), window.height()), window.scale_factor());
+    let image_handle = images.add(create_canvas(size));
     commands.insert_resource(CanvasImage(image_handle.clone()));
 
     commands.spawn((
@@ -105,15 +120,12 @@ fn setup_pixel_canvas(
             },
             ..OrthographicProjection::default_2d()
         }),
-        // scale_factor 决定 Text2d 的字形按多大分辨率光栅化。默认的 `.into()` 会填
-        // 1.0，于是 font_size=36 的字被栅格化成 36px 再塞进 12 个画布像素——3 倍降采样
-        // 把点阵字糊掉。填 1/3 后字形直接按 12px 光栅化，纹素与画布像素 1:1。
-        // 投影用的是 ScalingMode::Fixed，不受 scale_factor 影响，所以版面尺寸不变。
+        // 字形直接按最终屏幕密度光栅化，避免先缩小再放大造成细笔画丢失。
         RenderTarget::Image(ImageRenderTarget {
             handle: image_handle.clone(),
-            scale_factor: 1.0 / WORLD_PER_PX,
+            scale_factor: size.1 as f32 / ARENA_H,
         }),
-        Msaa::Off,
+        Msaa::Sample4,
         InGameCamera,
         GAME_LAYERS,
     ));
@@ -164,32 +176,34 @@ fn sync_canvas_mode(
     config: Res<PixelCanvasConfig>,
     canvas_image: Res<CanvasImage>,
     mut images: ResMut<Assets<Image>>,
-    mut game_projection: Query<&mut Projection, With<InGameCamera>>,
+    mut game_camera: Query<(&mut Projection, &mut RenderTarget), With<InGameCamera>>,
+    window: Single<Ref<Window>>,
     // 两个查询都要 &mut Sprite，Bevy 无法自己证明 With<Canvas> 与 With<CrtScanline>
     // 不相交，必须显式 Without 拆开——否则系统初始化时直接 panic(B0001)。
     mut canvas_sprite: Query<&mut Sprite, (With<Canvas>, Without<CrtScanline>)>,
     mut scanlines: Query<(&mut Sprite, &mut Visibility), With<CrtScanline>>,
 ) {
-    if !config.is_changed() {
+    if !config.is_changed() && !window.is_changed() {
         return;
     }
     let (width, height) = config.display_mode.canvas_size();
-    if let Some(image) = images.get_mut(&canvas_image.0) {
-        let size = Extent3d {
-            width,
-            height,
-            ..default()
-        };
-        image.texture_descriptor.size = size;
+    let native = render_size(config.display_mode, Vec2::new(window.width(), window.height()), window.scale_factor());
+    let size = Extent3d { width: native.0, height: native.1, ..default() };
+    if images.get(&canvas_image.0).is_some_and(|image| image.texture_descriptor.size != size)
+        && let Some(image) = images.get_mut(&canvas_image.0)
+    {
         image.resize(size);
     }
-    if let Ok(mut projection) = game_projection.single_mut()
-        && let Projection::Orthographic(projection) = &mut *projection
-    {
-        projection.scaling_mode = bevy::camera::ScalingMode::Fixed {
-            width: config.display_mode.world_width(),
-            height: ARENA_H,
-        };
+    if let Ok((mut projection, mut target)) = game_camera.single_mut() {
+        if let RenderTarget::Image(target) = &mut *target {
+            target.scale_factor = native.1 as f32 / ARENA_H;
+        }
+        if let Projection::Orthographic(projection) = &mut *projection {
+            projection.scaling_mode = bevy::camera::ScalingMode::Fixed {
+                width: config.display_mode.world_width(),
+                height: ARENA_H,
+            };
+        }
     }
     if let Ok(mut sprite) = canvas_sprite.single_mut() {
         sprite.custom_size = Some(Vec2::new(width as f32, height as f32));
@@ -282,6 +296,27 @@ impl Plugin for PixelCanvasPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn render_target_matches_native_pixels_and_dpi() {
+        let size = Vec2::new(1280.0, 720.0);
+        assert_eq!(render_size(DisplayMode::Classic4x3, size, 1.0), (960, 720));
+        assert_eq!(render_size(DisplayMode::Widescreen16x9, size, 1.0), (1280, 720));
+        assert_eq!(render_size(DisplayMode::Classic4x3, size, 2.0), (1920, 1440));
+        assert_eq!(render_size(DisplayMode::Classic4x3, size, 1.25), (1200, 900));
+    }
+
+    #[test]
+    fn pointer_mapping_excludes_black_bars_and_tracks_dpi() {
+        let mut window = Window { resolution: bevy::window::WindowResolution::new(1280, 720), ..default() };
+        let config = PixelCanvasConfig::default();
+        assert_eq!(cursor_world(&window, &config, Vec2::new(640.0, 360.0)), Some(Vec2::ZERO));
+        assert_eq!(cursor_world(&window, &config, Vec2::new(160.0, 360.0)), Some(Vec2::new(-360.0, 0.0)));
+        assert!(cursor_world(&window, &config, Vec2::new(80.0, 360.0)).is_none());
+        window.resolution.set_scale_factor_override(Some(2.0));
+        assert_eq!(cursor_world(&window, &config, Vec2::new(320.0, 180.0)), Some(Vec2::ZERO));
+        assert_eq!(cursor_world(&window, &config, Vec2::new(80.0, 180.0)), Some(Vec2::new(-360.0, 0.0)));
+    }
 
     #[test]
     fn canvas_uses_three_world_units_per_pixel() {

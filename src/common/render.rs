@@ -12,9 +12,9 @@ pub struct UiFont(pub Handle<Font>);
 impl FromWorld for UiFont {
     fn from_world(world: &mut World) -> Self {
         let font = Font::try_from_bytes(
-            include_bytes!("../../assets/fonts/fusion-pixel-12px-proportional-zh_hans.ttf").to_vec(),
+            include_bytes!("../../assets/fonts/NotoSansCJK-Regular.ttc").to_vec(),
         )
-        .expect("embedded Fusion Pixel CJK font must be valid");
+        .expect("embedded Noto CJK font must be valid");
         let mut fonts = world.resource_mut::<Assets<Font>>();
         UiFont(fonts.add(font))
     }
@@ -57,7 +57,9 @@ pub fn panel<'a, M: Component + Clone>(
     marker: M,
 ) -> EntityCommands<'a> {
     rect(commands, pos, size, border, marker.clone());
-    rect(commands, pos, size - Vec2::splat(4.0), fill, marker)
+    let mut inner = rect(commands, pos, size - Vec2::splat(4.0), fill, marker);
+    inner.insert(Transform::from_translation(pos.extend(Z_SPRITE + 0.1)));
+    inner
 }
 
 /// 仅当内容变化时才写入 `Text2d`。
@@ -70,14 +72,11 @@ pub fn set_text(dst: &mut Mut<Text2d>, value: &str) {
     }
 }
 
-/// 点阵字体专用的 `TextFont`：关掉灰度抗锯齿。
-///
-/// 配合渲染目标的 `scale_factor`（见 [`crate::common::pixel_canvas`]），字形按画布
-/// 像素原生光栅化；再关掉抗锯齿，才能拿到干净的点阵边缘而不是一圈灰边。
+/// 游戏文本样式；沿用函数名以兼容各玩法，字形按屏幕密度平滑渲染。
 pub fn pixel_font(font: &UiFont, size: f32) -> TextFont {
     TextFont::from_font_size(size)
         .with_font(font.0.clone())
-        .with_font_smoothing(FontSmoothing::None)
+        .with_font_smoothing(FontSmoothing::AntiAliased)
 }
 
 pub fn text<'a, M: Component>(

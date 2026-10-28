@@ -6,12 +6,12 @@ use crate::common::constants::SAVE_FILE;
 use crate::common::settings::UserSettings;
 
 const SAVE_MAGIC: [u8; 4] = *b"BAOG";
-const SAVE_VERSION: u16 = 3;
+const SAVE_VERSION: u16 = 4;
 
-/// 存档里每个进度数组的槽位数：经典 8 款占 0..8，益智 8 款占 8..16。
+/// 存档里每个进度数组的槽位数：经典 8 款占 0..8，益智 18 款占 8..26。
 ///
 /// 顺序是**存档兼容性契约**：前 8 槽永远是原来的经典八款，新游戏只能往后追加。
-pub(super) const SAVE_SLOTS: usize = 16;
+pub(super) const SAVE_SLOTS: usize = 26;
 
 /// 1.x 裸结构 `[u32;8] + [u8;8] + f32` 的精确长度。
 ///
@@ -26,7 +26,7 @@ pub(super) enum AppState {
     Playing,
 }
 
-/// 卡带墙的分栏。经典是原来的动作 / 射击八款，益智是面向 5-12 岁的八款。
+/// 卡带墙的分栏。经典是原来的动作 / 射击八款，益智是面向 5-12 岁的游戏。
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash)]
 pub(super) enum GameCategory {
     #[default]
@@ -115,6 +115,16 @@ pub(super) enum GameKind {
     LinkUp,
     Simon,
     SpotDiff,
+    Pattern,
+    FlashGrid,
+    Mirror,
+    GoNoGo,
+    Balance,
+    Hanoi,
+    LightsOut,
+    Coding,
+    Rotation,
+    Detective,
 }
 
 impl GameKind {
@@ -130,7 +140,7 @@ impl GameKind {
         GameKind::Sokoban,
     ];
 
-    /// 益智栏，占存档槽位 8..16。
+    /// 益智栏，占存档槽位 8..26。
     pub(super) const PUZZLE: &'static [GameKind] = &[
         GameKind::Schulte,
         GameKind::Stroop,
@@ -140,6 +150,16 @@ impl GameKind {
         GameKind::LinkUp,
         GameKind::Simon,
         GameKind::SpotDiff,
+        GameKind::Pattern,
+        GameKind::FlashGrid,
+        GameKind::Mirror,
+        GameKind::GoNoGo,
+        GameKind::Balance,
+        GameKind::Hanoi,
+        GameKind::LightsOut,
+        GameKind::Coding,
+        GameKind::Rotation,
+        GameKind::Detective,
     ];
 
     /// 全部游戏，顺序必须是 `CLASSIC` 后接 `PUZZLE`（`index()` 与之对齐）。
@@ -160,6 +180,29 @@ impl GameKind {
         GameKind::LinkUp,
         GameKind::Simon,
         GameKind::SpotDiff,
+        GameKind::Pattern,
+        GameKind::FlashGrid,
+        GameKind::Mirror,
+        GameKind::GoNoGo,
+        GameKind::Balance,
+        GameKind::Hanoi,
+        GameKind::LightsOut,
+        GameKind::Coding,
+        GameKind::Rotation,
+        GameKind::Detective,
+    ];
+
+    pub(super) const TRAINING: &[GameKind] = &[
+        GameKind::Pattern,
+        GameKind::FlashGrid,
+        GameKind::Mirror,
+        GameKind::GoNoGo,
+        GameKind::Balance,
+        GameKind::Hanoi,
+        GameKind::LightsOut,
+        GameKind::Coding,
+        GameKind::Rotation,
+        GameKind::Detective,
     ];
 
     pub(super) fn index(self) -> usize {
@@ -180,6 +223,16 @@ impl GameKind {
             GameKind::LinkUp => 13,
             GameKind::Simon => 14,
             GameKind::SpotDiff => 15,
+            GameKind::Pattern => 16,
+            GameKind::FlashGrid => 17,
+            GameKind::Mirror => 18,
+            GameKind::GoNoGo => 19,
+            GameKind::Balance => 20,
+            GameKind::Hanoi => 21,
+            GameKind::LightsOut => 22,
+            GameKind::Coding => 23,
+            GameKind::Rotation => 24,
+            GameKind::Detective => 25,
         }
     }
 
@@ -209,6 +262,16 @@ impl GameKind {
             GameKind::LinkUp => "14 连连看",
             GameKind::Simon => "15 记忆序列",
             GameKind::SpotDiff => "16 找不同",
+            GameKind::Pattern => "17 规律接龙",
+            GameKind::FlashGrid => "18 闪记方格",
+            GameKind::Mirror => "19 镜像画室",
+            GameKind::GoNoGo => "20 红绿灯反应",
+            GameKind::Balance => "21 天平配数",
+            GameKind::Hanoi => "22 汉诺塔",
+            GameKind::LightsOut => "23 熄灯挑战",
+            GameKind::Coding => "24 路线编程",
+            GameKind::Rotation => "25 旋转拼图",
+            GameKind::Detective => "26 目标侦探",
         }
     }
 
@@ -230,6 +293,16 @@ impl GameKind {
             GameKind::LinkUp => "连起一样的图案，拐弯别超过两次！",
             GameKind::Simon => "看清灯光顺序，照着按回去！",
             GameKind::SpotDiff => "两张图哪里不一样？全找出来！",
+            GameKind::Pattern => "观察前面的规律，选出下一项",
+            GameKind::FlashGrid => "记住亮起的格子，再把它们找回来",
+            GameKind::Mirror => "沿中间的镜子，画出对称图案",
+            GameKind::GoNoGo => "认准目标再按键，其他图案耐心等待",
+            GameKind::Balance => "选出合适的砝码，让天平两边相等",
+            GameKind::Hanoi => "每次移动一个圆盘，大盘不能压小盘",
+            GameKind::LightsOut => "点击翻转十字灯，把灯全部熄灭",
+            GameKind::Coding => "先排好方向指令，再带机器人到终点",
+            GameKind::Rotation => "旋转右边图形，让它和左边完全一致",
+            GameKind::Detective => "认准颜色和形状，找齐目标图案",
         }
     }
 
@@ -262,6 +335,16 @@ impl GameKind {
             GameKind::LinkUp => Color::srgb(0.36, 0.76, 0.96),
             GameKind::Simon => Color::srgb(0.98, 0.42, 0.66),
             GameKind::SpotDiff => Color::srgb(0.99, 0.56, 0.38),
+            GameKind::Pattern => Color::srgb(0.40, 0.82, 0.90),
+            GameKind::FlashGrid => Color::srgb(0.75, 0.60, 0.98),
+            GameKind::Mirror => Color::srgb(0.95, 0.58, 0.76),
+            GameKind::GoNoGo => Color::srgb(0.45, 0.85, 0.52),
+            GameKind::Balance => Color::srgb(0.98, 0.76, 0.35),
+            GameKind::Hanoi => Color::srgb(0.90, 0.65, 0.40),
+            GameKind::LightsOut => Color::srgb(0.95, 0.87, 0.36),
+            GameKind::Coding => Color::srgb(0.38, 0.76, 0.98),
+            GameKind::Rotation => Color::srgb(0.65, 0.72, 0.98),
+            GameKind::Detective => Color::srgb(0.94, 0.57, 0.44),
         }
     }
 
@@ -321,6 +404,23 @@ struct SaveEnvelopeV2 {
     data: SaveDataV2,
 }
 
+/// v3（16 槽）冻结快照；扩容时完整保留既有游戏与年龄档。
+#[derive(Serialize, Deserialize)]
+struct SaveDataV3 {
+    high_scores: [u32; 16],
+    unlocked_levels: [u8; 16],
+    selected_levels: [u8; 16],
+    settings: UserSettings,
+    age_tier: AgeTier,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SaveEnvelopeV3 {
+    magic: [u8; 4],
+    version: u16,
+    data: SaveDataV3,
+}
+
 #[derive(Serialize, Deserialize)]
 struct SaveEnvelope {
     magic: [u8; 4],
@@ -378,6 +478,7 @@ impl SaveData {
         {
             let mut data = match header.version {
                 SAVE_VERSION => bincode::deserialize::<SaveEnvelope>(bytes).ok()?.data,
+                3 => Self::migrate_v3(bincode::deserialize::<SaveEnvelopeV3>(bytes).ok()?.data),
                 2 => Self::migrate_v2(bincode::deserialize::<SaveEnvelopeV2>(bytes).ok()?.data),
                 // 未知版本（含从更新的构建降级回来）明确拒绝，宁可回默认档也不猜。
                 _ => return None,
@@ -393,6 +494,16 @@ impl SaveData {
             return Some(data);
         }
         None
+    }
+
+    fn migrate_v3(old: SaveDataV3) -> Self {
+        let mut data = Self::default();
+        data.high_scores[..16].copy_from_slice(&old.high_scores);
+        data.unlocked_levels[..16].copy_from_slice(&old.unlocked_levels);
+        data.selected_levels[..16].copy_from_slice(&old.selected_levels);
+        data.settings = old.settings;
+        data.age_tier = old.age_tier;
+        data
     }
 
     fn migrate_v2(old: SaveDataV2) -> Self {
@@ -521,6 +632,30 @@ mod save_tests {
     #[test]
     fn corrupt_save_is_rejected() {
         assert!(SaveData::decode(b"not a baogames save").is_none());
+    }
+
+    #[test]
+    fn v3_upgrade_preserves_all_progress_settings_and_age() {
+        let old = SaveEnvelopeV3 {
+            magic: SAVE_MAGIC, version: 3,
+            data: SaveDataV3 {
+                high_scores: std::array::from_fn(|i| 100 + i as u32),
+                unlocked_levels: [3; 16], selected_levels: [2; 16],
+                settings: UserSettings { music_volume: 0.3, ..default() },
+                age_tier: AgeTier::Senior,
+            },
+        };
+        let bytes = bincode::serialize(&old).expect("v3 fixture");
+        let migrated = SaveData::decode(&bytes).expect("v3 migration");
+        assert_eq!(&migrated.high_scores[..16], &old.data.high_scores);
+        assert_eq!(&migrated.unlocked_levels[..16], &[3; 16]);
+        assert_eq!(&migrated.selected_levels[..16], &[2; 16]);
+        assert_eq!(&migrated.high_scores[16..], &[0; 10]);
+        assert_eq!(&migrated.unlocked_levels[16..], &[1; 10]);
+        assert_eq!(&migrated.selected_levels[16..], &[1; 10]);
+        assert_eq!(migrated.age_tier, AgeTier::Senior);
+        assert_eq!(migrated.settings.music_volume, 0.3);
+        assert!(SaveData::decode(&bytes[..bytes.len() - 2]).is_none());
     }
 
     #[test]

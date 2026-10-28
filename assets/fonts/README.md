@@ -9,4 +9,4 @@
 - Copyright: Copyright (c) 2022, TakWolf
 - License: SIL Open Font License 1.1; see `OFL.txt`
 
-The font is embedded unchanged in the game executable. The older Noto Sans CJK file is retained only as a repository fallback and is not loaded by the current build.
+Fusion Pixel is retained as a repository asset. The current build embeds `NotoSansCJK-Regular.ttc` for both the game screens and the library/settings screens. Text is rasterized at the final display density, including DPI scaling, with antialiasing enabled.

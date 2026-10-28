@@ -1,44 +1,27 @@
 #!/usr/bin/env python3
-"""把 1280×720 的窗口截图还原成 240×180 的真实画布像素。
+"""保留游戏截图的原生分辨率，只裁掉 4:3 黑边；--wide 用于 16:9 截图。
 
-窗口是画布的整数倍最近邻放大（4:3 下 4×，左右各 160px 黑边），所以降采样是无损的。
-脚本会校验每个放大块内颜色一致 —— 一旦画布尺寸或缩放倍数变了就报错，而不是
-悄悄产出一张糊图。
+大厅原图不裁剪。游戏现在按屏幕像素渲染，禁止再降采样回 240×180。
 """
 import sys
 from pathlib import Path
 from PIL import Image
 
-CANVAS_W, CANVAS_H = 240, 180  # DisplayMode::Classic4x3
 
-
-def recover(path: Path) -> Path:
+def recover(path: Path, wide: bool = False) -> Path:
     im = Image.open(path).convert("RGB")
     w, h = im.size
-    scale = h // CANVAS_H
-    if scale < 1 or h % CANVAS_H:
-        raise SystemExit(f"{path}: 高度 {h} 不是画布高 {CANVAS_H} 的整数倍")
-    content_w = CANVAS_W * scale
-    left = (w - content_w) // 2
-    crop = im.crop((left, 0, left + content_w, h))
-
-    px = crop.load()
-    for by in range(0, h, scale):
-        for bx in range(0, content_w, scale):
-            c = px[bx, by]
-            for dy in range(scale):
-                for dx in range(scale):
-                    if px[bx + dx, by + dy] != c:
-                        raise SystemExit(
-                            f"{path}: ({bx + dx},{by + dy}) 处放大块不均匀，"
-                            f"窗口不是画布的 {scale}× 最近邻放大"
-                        )
-
+    ratio = 16 / 9 if wide else 4 / 3
+    content_w = min(w, round(h * ratio))
+    content_h = min(h, round(content_w / ratio))
+    left, top = (w - content_w) // 2, (h - content_h) // 2
     out = path.with_name(path.name.removesuffix("_win.png") + "_canvas.png")
-    crop.resize((CANVAS_W, CANVAS_H), Image.NEAREST).save(out)
+    im.crop((left, top, left + content_w, top + content_h)).save(out)
     return out
 
 
 if __name__ == "__main__":
     for arg in sys.argv[1:]:
-        print(recover(Path(arg)))
+        if arg == "--wide" or Path(arg).name.startswith("menu_"):
+            continue
+        print(recover(Path(arg), "--wide" in sys.argv or "_wide_" in Path(arg).name))

@@ -25,6 +25,7 @@ pub mod space_shooter;
 pub mod spotdiff;
 mod super_mario;
 pub mod tank;
+mod training;
 
 use crate::common::audio::{AudioMix, MusicEntity, MusicKind, PlayMusic, PlaySfx, SfxKind};
 use crate::common::constants::{ARENA_H, ARENA_W, WINDOW_H, WINDOW_W, Z_HUD_LAYER};
@@ -80,6 +81,9 @@ pub fn run() {
         .insert_resource(Time::<Fixed>::from_hz(60.0))
         .init_resource::<UiFont>()
         .init_resource::<menu::MenuUiState>()
+        .init_resource::<menu::MenuArt>()
+        .init_resource::<menu::MenuPointer>()
+        .init_resource::<training::TrainingArt>()
         .init_resource::<bubble_shooter::BubbleAssets>()
         .init_resource::<super_mario::MarioControls>()
         .init_state::<AppState>()
@@ -88,8 +92,8 @@ pub fn run() {
             (MarioFixedSet::World, MarioFixedSet::FinishAndHud).chain(),
         )
         .add_systems(OnEnter(AppState::Menu), (reset_camera, menu::setup_menu).chain())
-        .add_systems(Update, menu::menu_input.run_if(in_state(AppState::Menu)))
-        .add_systems(OnExit(AppState::Menu), cleanup::<MenuEntity>)
+        .add_systems(Update, (menu::menu_pointer, menu::menu_input).chain().run_if(in_state(AppState::Menu)))
+        .add_systems(OnExit(AppState::Menu), (cleanup::<MenuEntity>, cleanup::<menu::MenuCamera>, menu::reset_cursor))
         .add_systems(OnEnter(AppState::Playing), (reset_camera, setup_game).chain())
         .add_systems(
             PreUpdate,
@@ -548,6 +552,13 @@ pub fn run() {
                 .run_if(resource_exists::<spotdiff::SpotDiffStage>),
         )
         .add_systems(
+            Update,
+            (training::input.after(pause_and_result_input), training::render)
+                .chain()
+                .run_if(in_state(AppState::Playing))
+                .run_if(resource_exists::<training::TrainingStage>),
+        )
+        .add_systems(
             OnExit(AppState::Playing),
             (
                 cleanup::<GameEntity>,
@@ -655,6 +666,7 @@ fn paint_stage_backdrop(commands: &mut Commands, kind: GameKind, display_mode: D
             Color::srgb(0.19, 0.13, 0.09),
             Color::srgb(0.99, 0.56, 0.38),
         ),
+        _ => (Color::srgb(0.035, 0.055, 0.08), Color::srgb(0.06, 0.08, 0.12), kind.accent()),
     };
 
     // 背景铺满最宽的比例即可；边框必须按**当前可见宽度**画，
@@ -742,6 +754,10 @@ fn setup_game(
         GameKind::LinkUp => MusicKind::LinkUp,
         GameKind::Simon => MusicKind::Simon,
         GameKind::SpotDiff => MusicKind::SpotDiff,
+        GameKind::Pattern | GameKind::Mirror | GameKind::Balance | GameKind::Rotation => MusicKind::Sudoku,
+        GameKind::FlashGrid => MusicKind::MemoryMatch,
+        GameKind::GoNoGo | GameKind::Detective => MusicKind::Schulte,
+        GameKind::Hanoi | GameKind::LightsOut | GameKind::Coding => MusicKind::Sokoban,
     }));
 
     // HUD 根：挂相机下，滚屏游戏的 HUD 自动跟随（见 hud.rs 模块说明）
@@ -802,6 +818,7 @@ fn setup_game(
         GameKind::SpotDiff => {
             spotdiff::setup_stage(&mut commands, &font, hud_root, level, save.age_tier)
         }
+        kind => training::setup_stage(&mut commands, kind, level, save.age_tier),
     }
 }
 
@@ -938,6 +955,7 @@ fn cleanup_stage_resources(mut commands: Commands) {
     commands.remove_resource::<linkup::LinkupStage>();
     commands.remove_resource::<simon::SimonStage>();
     commands.remove_resource::<spotdiff::SpotDiffStage>();
+    commands.remove_resource::<training::TrainingStage>();
     // 益智八款共用的输入缓冲（非益智关卡时本就不存在，remove 是空操作）。
     commands.remove_resource::<puzzle::PuzzleControls>();
 }

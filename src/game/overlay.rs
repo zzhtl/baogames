@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use crate::common::constants::{ARENA_H, ARENA_W, FONT_BODY, FONT_TITLE, Z_OVERLAY, Z_OVERLAY_PANEL, Z_OVERLAY_TEXT};
 use crate::common::pixel_canvas::InGameCamera;
 use crate::common::px::px;
-use crate::common::theme::{ACCENT, BORDER, DANGER, SCRIM, SURFACE, TEXT_DIM, TEXT_MUTED};
+use crate::common::theme::{ACCENT, BORDER, DANGER, SCRIM, SURFACE, TEXT_MUTED};
 use bevy::text::FontHinting;
 
 use crate::common::render::{UiFont, pixel_font};
@@ -141,7 +141,7 @@ pub(super) fn overlay_sync(
     if !detail.is_empty() {
         spawn_text(&detail, px(-5.0), FONT_BODY, TEXT_MUTED);
     }
-    spawn_text(hint, px(-21.0), FONT_BODY, TEXT_DIM);
+    spawn_text(hint, px(-21.0), FONT_BODY, TEXT_MUTED);
 }
 
 #[cfg(test)]
